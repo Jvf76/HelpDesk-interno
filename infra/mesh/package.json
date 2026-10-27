@@ -8,9 +8,11 @@
   "overrides": {
     "compression": "1.8.2",
     "express": "4.22.3",
-    "qs": "6.16.1"
+    "qs": "6.16.1",
+    "node-forge": "1.4.1"
   },
   "scripts": {
-    "postinstall": "node patch-bootstrap.mjs"
+    "postinstall": "node patch-bootstrap.mjs && node patch-session.mjs",
+    "test": "node --test tests/*.test.cjs"
   }
 }

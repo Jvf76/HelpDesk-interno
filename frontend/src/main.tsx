@@ -103,7 +103,10 @@ function App() {
     const t = setInterval(() => {
       api<RemoteSession>("/sessions/" + session.id)
         .then(setSession)
-        .catch((e) => setError(e.message));
+        .catch((e) => {
+          setError(e.message);
+          setSession(current => current && !current.ended_at ? {...current, status: "UNVERIFIED"} : current);
+        });
     }, 2500);
     return () => clearInterval(t);
   }, [session?.id, session?.ended_at]);
@@ -873,7 +876,7 @@ function App() {
               </div>
               <section className="remote-stage">
                 <Monitor size={56} />
-                <h2>{labels[session.status] ?? session.status}</h2>
+                <h2>{session.result === "EXPIRED_UNCONFIRMED" ? "Expirado • encerramento não confirmado" : (labels[session.status] ?? session.status)}</h2>
                 <p>
                   O consentimento inicial ocorre no Uai Suporte Agent. O
                   MeshAgent solicitará uma segunda confirmação antes de
@@ -910,11 +913,13 @@ function App() {
                 )}
                 {session.status === "READY" && (
                   <p>
-                    A tela e o estado real da conexão aparecem na janela do
-                    MeshCentral. Este painel ainda não recebe confirmação de
-                    transmissão ou recusa do motor.
+                    Aguarde a confirmação local na janela do MeshAgent.
+                    O link emitido ainda não significa transmissão.
                   </p>
                 )}
+                {session.started_at && <p>Primeiro bloco de imagem no motor: {date(session.started_at)}</p>}
+                {session.engine_seen_at && <p>Última confirmação do motor: {date(session.engine_seen_at)}</p>}
+                {session.status === "ACTIVE" && <p>A imagem aparece na janela remota. A recepção pelo motor não comprova a renderização no navegador.</p>}
                 {session.result && <small>Resultado: {session.result}</small>}
               </section>
               <div className="info-card">

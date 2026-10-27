@@ -65,8 +65,13 @@ Spring Boot foi fixado em **3.5.16**, Java **21**, React **19**, TypeScript **5.
 1. Backend autentica técnico e confirma permissão, presença e vínculo ao chamado.
 2. C# apresenta consentimento, padrão Não, com nome do técnico e modalidade.
 3. Após aceite, backend pede compartilhamento ao motor com `p=2` (desktop apenas), `viewOnly`, `consent=72` (prompt + barra) e `expire=1` minuto.
-4. A URL só é entregue ao mesmo login que iniciou a solicitação, uma única emissão. A URL Mesh é uma credencial bearer reutilizável durante sua curta validade: não a compartilhar. Ela abre uma nova janela do MeshCentral, com segundo consentimento local.
+4. A URL só é entregue ao mesmo login que iniciou a solicitação, uma única emissão. A URL Mesh é uma credencial bearer: não a compartilhar. O patch Uai agora a vincula a uma única conexão do viewer. Ela abre uma nova janela do MeshCentral, com segundo consentimento local.
 5. Revogação, logout, perda de permissão, offline ou expiração provocam `removeDeviceShare`. O relay contém handler que fecha ambos os lados quando recebe removedDeviceShare. Falha no motor fica como STOPPING; não é apresentada como parada confirmada.
-6. Em falha de backend, a expiração do próprio MeshCentral limita o compartilhamento. O teste Windows deve comprovar que ela corta tanto imagem quanto entrada.
+6. Em falha de backend, o lease de 12 s no relay e a expiração absoluta do próprio MeshCentral limitam o compartilhamento. O teste Windows deve comprovar que ela corta tanto imagem quanto entrada.
 
-O painel não recebe ainda o evento de primeiro frame/aceite do MeshAgent ou encerramento de cada conexão. Portanto READY significa **link emitido**, nunca “tela conectada”. `requested_at`/`ended_at` são do ciclo da solicitação. Isso deixa pendente parte do requisito de auditoria completa do atendimento real. A janela remota é a interface do motor, não um viewer React incorporado. Nenhuma sessão real foi anunciada como concluída.
+O painel recebe agora consentimento, primeiro bloco de imagem e encerramento do motor. READY significa **link emitido**; ACTIVE exige imagem observada no relay, não comprova renderização no browser. A migração V2 armazena início e confirmação do motor; término confirmado utiliza o instante informado pelo motor. A prova dessa correlação em Windows permanece pendente. A janela remota é a interface do motor, não um viewer React incorporado. Nenhuma sessão real foi anunciada como concluída.
+
+
+## Atualização de 27/10/2026
+
+A integração agora inclui um patch versionado no relay/core Mesh 1.3.1: telemetria de consentimento/imagem/fim, link de conexão única e lease de 12 s renovado pelo Spring. Não é funcionalidade do projeto de referência nem do MeshCentral sem modificação. Consulte [o contrato, manutenção e análise de assinatura/dependências](06-integracao-e-seguranca-remota.md). Não há atendimento Windows homologado.

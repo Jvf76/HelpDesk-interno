@@ -56,9 +56,14 @@ stateDiagram-v2
  CONSENTED --> ISSUING: emissão pela mesma sessão de login
  ISSUING --> READY: compartilhamento emitido pelo Mesh
  ISSUING --> ENDED: falha do motor
+ READY --> CONNECTING: viewer conectado
+ CONNECTING --> AWAITING_CONSENT: prompt MeshAgent
+ AWAITING_CONSENT --> AWAITING_FRAME: aceite final
+ AWAITING_FRAME --> ACTIVE: bloco completo de imagem no relay
+ ACTIVE --> ENDED: corte confirmado no motor
  READY --> STOPPING: remoção solicitada sem confirmação
  READY --> ENDED: remoção confirmada
  STOPPING --> ENDED: confirmação ou prazo / resultado não confirmado
 ```
 
-READY **não** é ACTIVE: o segundo consentimento e o primeiro frame não estão integrados à máquina de estados. Não existe transição falsa para ACTIVE. `ended_at` indica fechamento da solicitação, não comprovação de interrupção da tela quando resultado termina em UNCONFIRMED. O motor impõe expiração independente. Mudanças de permissão e logout acionam revogação, além da varredura a cada 3 s.
+READY não é ACTIVE. ACTIVE exige imagem observada no relay. AWAITING_FRAME é o consentimento final; CONSENTED é o aceite preliminar C#. started_at/engine_consent_at/engine_seen_at vêm da integração. ended_at usa o término informado pelo motor quando disponível. Sem confirmação não se afirma corte físico: STOPPING/EXPIRED_UNCONFIRMED. UNVERIFIED é um estado de apresentação quando a confirmação fica antiga ou o painel perde contato. Polling de 3 s, lease de 12 s, prazo absoluto de 60 s. Ver [detalhes e limites](06-integracao-e-seguranca-remota.md).

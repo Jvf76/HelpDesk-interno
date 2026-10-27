@@ -27,9 +27,19 @@ sealed class AgentWindow : Form
     readonly Button stop = new() { Text = "Encerrar solicitação remota", AutoSize = true, Enabled = false };
     readonly ListBox requests = new() { Width = 540, Height = 110 };
     readonly HashSet<Guid> prompted = [];
+    static void Log(string action) {
+        try {
+            Directory.CreateDirectory(Storage);
+            string path = Path.Combine(Storage, "agent.log");
+            if (File.Exists(path) && new FileInfo(path).Length > 1048576) File.Move(path, path + ".1", true);
+            File.AppendAllText(path, $"{DateTimeOffset.UtcNow:O} {action}{Environment.NewLine}");
+        } catch { /* Logging must not prevent local UI/stop actions. */ }
+    }
+    string? lastState;
     Identity? identity; List<Request> current = []; bool polling, closing, locked;
     public AgentWindow()
     {
+        Log("AGENT_START");
         Text = "Uai Suporte • Uai Telecom"; Size = new Size(620, 520); MinimumSize = new Size(620, 520); StartPosition = FormStartPosition.CenterScreen; BackColor = Color.White; Font = new Font("Segoe UI", 10);
         var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(24), AutoScroll = true };
         layout.Controls.Add(new Label { Text = "Uai Suporte", AutoSize = true, Font = new Font("Segoe UI", 22, FontStyle.Bold) });
@@ -48,7 +58,7 @@ sealed class AgentWindow : Form
         {
             if (!Uri.TryCreate(server.Text.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo) || uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query)) throw new InvalidOperationException("Informe somente a origem HTTPS do servidor, sem caminho, usuário ou parâmetros.");
             using var response = await http.PostAsJsonAsync(new Uri(uri, "api/agent/enroll"), new { code = code.Text.Trim(), os = Environment.OSVersion.VersionString }); if (!response.IsSuccessStatusCode) throw new InvalidOperationException("Vínculo recusado. Confira código, validade e certificado.");
-            var result = await response.Content.ReadFromJsonAsync<Enrollment>(Json) ?? throw new InvalidOperationException("Resposta inválida."); identity = new Identity(uri.ToString(), result.Token, result.DeviceId); Directory.CreateDirectory(Storage); File.WriteAllBytes(Path.Combine(Storage, "identity.bin"), ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(identity), null, DataProtectionScope.CurrentUser)); code.Clear(); Configure(); await Poll();
+            var result = await response.Content.ReadFromJsonAsync<Enrollment>(Json) ?? throw new InvalidOperationException("Resposta inválida."); identity = new Identity(uri.ToString(), result.Token, result.DeviceId); Directory.CreateDirectory(Storage); File.WriteAllBytes(Path.Combine(Storage, "identity.bin"), ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(identity), null, DataProtectionScope.CurrentUser)); code.Clear(); Log("ENROLLED"); Configure(); await Poll();
         }
         catch (Exception e) { MessageBox.Show(this, e is HttpRequestException ? "Servidor inacessível ou certificado não confiável. Não desative a validação TLS." : e.Message, "Falha no vínculo", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         finally { enroll.Enabled = true; }
@@ -59,8 +69,10 @@ sealed class AgentWindow : Form
         try
         {
             using var response = await http.PostAsJsonAsync("api/agent/heartbeat", new { os = Environment.OSVersion.VersionString });
-            if (response.StatusCode == HttpStatusCode.Unauthorized) { status.Text = "Credencial revogada. O agente não está disponível para atendimento."; timer.Stop(); return; }
+            if (response.StatusCode == HttpStatusCode.Unauthorized) { status.Text = "Credencial revogada. O agente não está disponível para atendimento."; Log("CREDENTIAL_REJECTED"); timer.Stop(); return; }
             response.EnsureSuccessStatusCode(); var beat = await response.Content.ReadFromJsonAsync<Heartbeat>(Json) ?? throw new InvalidOperationException(); current = beat.Requests;
+            string state = string.Join(",", current.Select(r => $"{r.Id}:{r.Status}"));
+            if (state != lastState) { Log("SESSION_STATE " + state); lastState = state; }
             requests.Items.Clear(); foreach (var r in current) requests.Items.Add($"{r.Technician} • {(r.Mode == "VIEW" ? "Visualização" : "Controle")} • {r.Status}"); stop.Enabled = current.Count > 0;
             status.Text = current.Count == 0 ? "Online • nenhuma solicitação de atendimento." : "Solicitação de suporte em andamento. Confira a janela do MeshAgent.";
             foreach (var r in current.Where(x => x.Status == "PENDING" && x.Expires_At > DateTimeOffset.UtcNow))
@@ -71,11 +83,11 @@ sealed class AgentWindow : Form
                 await Decide(r.Id, result == DialogResult.Yes && !locked ? "accept" : "reject");
             }
         }
-        catch { status.Text = "Sem contato com o servidor. Não aceite novas conexões. Para parar a tela, use o X da barra do MeshAgent."; }
+        catch { if (lastState != "OFFLINE") Log("SERVER_UNREACHABLE"); lastState = "OFFLINE"; status.Text = "Sem contato com o servidor. Não aceite novas conexões. Para parar a tela, use o X da barra do MeshAgent."; }
         finally { polling = false; }
     }
-    async Task Decide(Guid id, string decision) { using var response = await http.PostAsJsonAsync($"api/agent/sessions/{id}/{decision}", new { }); if (!response.IsSuccessStatusCode) throw new InvalidOperationException("Decisão recusada ou solicitação expirada."); }
+    async Task Decide(Guid id, string decision) { Log($"DECISION {id} {decision}"); using var response = await http.PostAsJsonAsync($"api/agent/sessions/{id}/{decision}", new { }); if (!response.IsSuccessStatusCode) throw new InvalidOperationException("Decisão recusada ou solicitação expirada."); }
     async Task StopAll() { stop.Enabled = false; status.Text = "Solicitando encerramento ao servidor…"; try { foreach (var r in current) await Decide(r.Id, "stop"); status.Text = "Encerramento solicitado. Use também o X da barra do MeshAgent; confirmação pendente do próximo contato."; } catch { status.Text = "Servidor indisponível. Encerre imediatamente pelo X da barra do MeshAgent."; } finally { stop.Enabled = current.Count > 0; } }
     void SessionChanged(object? sender, SessionSwitchEventArgs e) { if (IsDisposed) return; BeginInvoke((Action)(async () => { if (e.Reason == SessionSwitchReason.SessionLock) { locked = true; await StopAll(); } else if (e.Reason == SessionSwitchReason.SessionUnlock) { locked = false; await Poll(); } })); }
-    async void CloseAsync(object? sender, FormClosingEventArgs e) { if (closing) return; e.Cancel = true; closing = true; timer.Stop(); await StopAll(); SystemEvents.SessionSwitch -= SessionChanged; http.Dispose(); timer.Dispose(); Close(); }
+    async void CloseAsync(object? sender, FormClosingEventArgs e) { if (closing) return; e.Cancel = true; closing = true; Log("AGENT_CLOSE"); timer.Stop(); await StopAll(); SystemEvents.SessionSwitch -= SessionChanged; http.Dispose(); timer.Dispose(); Close(); }
 }

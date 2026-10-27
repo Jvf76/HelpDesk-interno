@@ -92,6 +92,8 @@ class CriticalFlowsTest {
         "node//testnode",
         Security.hash("test-agent-identity"));
     when(engine.enabled()).thenReturn(true);
+    when(engine.observe(anyString(), anyBoolean(), anyBoolean()))
+        .thenReturn(new RemoteEngine.Observation("READY", null, null, null));
     when(engine.create(anyString(), anyString(), anyBoolean()))
         .thenReturn(
             new RemoteEngine.Share("test-share", "https://remote.invalid/sharing?c=test-only"));
@@ -407,5 +409,67 @@ class CriticalFlowsTest {
     var t = result(mvc.perform(req("GET", "/api/tickets/" + id, aliceAccount, null)));
     assertEquals(2, t.path("events").size());
     assertEquals("EM_ATENDIMENTO", t.path("status").asText());
+  }
+
+  @Test
+  void realEngineObservationIsRequiredForActiveState() {
+    var id = Db.id(service.request(adminAccount.actor(), device, "CONTROL", null), "id");
+    service.decide(device, id, "accept");
+    service.launch(adminAccount.actor(), id);
+    assertEquals("READY", service.get(adminAccount.actor(), id).get("status"));
+    when(engine.observe(anyString(), eq(true), eq(false)))
+        .thenReturn(
+            new RemoteEngine.Observation("CONSENTED", null, null, System.currentTimeMillis()));
+    service.sweep();
+    assertEquals("AWAITING_FRAME", service.get(adminAccount.actor(), id).get("status"));
+    assertNull(service.get(adminAccount.actor(), id).get("started_at"));
+    when(engine.observe(anyString(), eq(true), eq(false)))
+        .thenReturn(
+            new RemoteEngine.Observation(
+                "ACTIVE", null, System.currentTimeMillis(), System.currentTimeMillis()));
+    service.sweep();
+    assertEquals("ACTIVE", service.get(adminAccount.actor(), id).get("status"));
+    assertNotNull(service.get(adminAccount.actor(), id).get("started_at"));
+  }
+
+  @Test
+  void nativeRejectionAndLocalStopReachPanel() {
+    for (String reason : List.of("REJECTED", "LOCAL_STOP", "CONNECTION_LOST", "LEASE_LOST")) {
+      var id = Db.id(service.request(adminAccount.actor(), device, "VIEW", null), "id");
+      service.decide(device, id, "accept");
+      service.launch(adminAccount.actor(), id);
+      when(engine.observe(anyString(), eq(true), eq(false)))
+          .thenReturn(new RemoteEngine.Observation("ENDED", reason, null, null));
+      service.sweep();
+      var s = service.get(adminAccount.actor(), id);
+      assertEquals("ENDED", s.get("status"));
+      assertEquals(reason, s.get("result"));
+      assertNull(s.get("started_at"));
+    }
+  }
+
+  @Test
+  void engineLossDoesNotKeepAnActiveBadge() {
+    var id = Db.id(service.request(adminAccount.actor(), device, "CONTROL", null), "id");
+    service.decide(device, id, "accept");
+    service.launch(adminAccount.actor(), id);
+    when(engine.observe(anyString(), eq(true), eq(false))).thenThrow(new RuntimeException());
+    doThrow(new RuntimeException()).when(engine).remove(anyString(), anyString());
+    service.sweep();
+    assertEquals("STOPPING", service.get(adminAccount.actor(), id).get("status"));
+  }
+
+  @Test
+  void stopPreservesTransmissionThatOccurredBetweenPolls() {
+    var id = Db.id(service.request(adminAccount.actor(), device, "CONTROL", null), "id");
+    service.decide(device, id, "accept");
+    service.launch(adminAccount.actor(), id);
+    long started = System.currentTimeMillis() - 500, ended = System.currentTimeMillis();
+    when(engine.remove(anyString(), anyString()))
+        .thenReturn(new RemoteEngine.Observation("ENDED", "SERVER_STOP", started, started, ended));
+    service.stop(adminAccount.actor(), id);
+    var s = service.get(adminAccount.actor(), id);
+    assertEquals(Instant.ofEpochMilli(started), Db.instant(s.get("started_at")));
+    assertEquals(Instant.ofEpochMilli(ended), Db.instant(s.get("ended_at")));
   }
 }

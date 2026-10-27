@@ -1,54 +1,51 @@
-# Resultados e pendências — 26/10/2026
+# Resultados — 27/10/2026
 
-## Resultado honesto
+**MVP não concluído. Nenhum atendimento entre dois Windows foi validado.** Esta revisão implementa a ligação do painel aos estados/encerramento do motor, com testes automatizados. Não transforma fixtures de protocolo em prova de captura/controle Windows.
 
-**Base funcional de helpdesk entregue; acesso remoto em prova técnica, não homologado.** Não há evidência de uma sessão Windows real concluída. A interface não usa dados falsos para simular máquinas ou telas. O motor está desativado por padrão, sem modo de demonstração.
+## Estado por entrega
 
-## Por etapa solicitada
-
-| Etapa | Entregue | Executado/verificado | Falta |
+| Entrega | Implementado | Testado automaticamente nesta revisão | Validado Windows real |
 |---|---|---|---|
-| 1. Análise/arquitetura | Relatório de referência fixado por commit, MIT/Apache, stack definida e fronteiras do motor | Leitura estática do fonte, licenças, dependências e instruções | Auditoria exaustiva/licenças da distribuição final |
-| 2. Prova remota | Perfil Mesh de laboratório, adaptador Java real, C# de consentimento, protocolo de teste A/B | Servidor Mesh iniciou; Java autenticou por WSS/TLS com CA confiada e hostname validado; credencial inválida rejeitada | Windows A/B, frames reais, mouse/teclado, recusa, corte local e expiração física |
-| 3. Identidade/dispositivos | Login/logout/CSRF, três perfis, autorização backend, vínculo uso único, heartbeat, permissões e revogação | 19 testes de fluxos críticos com PostgreSQL e execução via navegador | MFA, endurecimento operacional, distribuição assinada |
-| 4. Painel/remoto | Solicitação, consentimento C#, lançamento de janela Mesh, emissão limitada e encerramento | Testes com motor substituído e 4 testes de contrato da API Mesh | Viewer incorporado, eventos de consentimento final/primeiro frame/fim, vinculação a uma única conexão física |
-| 5. Chamados | Cadastro, prioridades/estados, comentários, histórico, vínculos e filtros | Testes API e browser criando/comentando/resolvendo chamado real em banco de teste | Paginação completa e políticas avançadas |
-| 6. Instalação/documentação | Migração, Compose, env, scripts Windows, documentação, roteiro de homologação | Build React; build/publish C# Windows x64; migração PostgreSQL; checagem de dependências | Docker Compose executado, instalação/desinstalação Windows e restauração de backup testadas |
+| Autenticação, permissões, isolamento de chamados e presença | Sim, preservado | PostgreSQL real; solicitante isolado, técnico sem controle negado, expiração e revogação | Não |
+| Integração Spring → Mesh | Capacidades exigidas, consulta/renovação/parada, 60 s absolutos | MeshCentral 1.3.1 real por WSS/TLS, autenticação e consulta de capacidades/estado desconhecido | Não |
+| Relay Uai | Consentimento/imagem/fim, lease 12 s, conexão única, filtro VIEW/CONTROL, perda de conexão | Testes de módulo e sockets WebSocket loopback com fixtures | Não |
+| Painel | Estado observado, primeiro bloco e última confirmação; estado incerto explícito | TypeScript e build Vite | Não |
+| C# | Consentimento/cadastro/parada e log rotativo sem tokens | Publish WinForms win-x64 self-contained | Não; não executado |
+| Banco | Migração V2, timestamps de motor e término preservados entre polls | V1→V2 em PostgreSQL 16.15; V1/V2 em H2 na primeira rodada | Não aplicável |
+| Distribuição/rede | Compose, scripts, ZIP C#, roteiro | Instalação npm limpa e patches; pacote gerado no Linux | Docker e PowerShell não executados; assinaturas pendentes |
 
-## Testes automatizados executados
+## Evidências automatizadas
 
-Ambiente Linux, Java 21.0.13, Spring Boot 3.5.16, PostgreSQL **16.15** em cluster descartável separado. Flyway V1 aplicado do zero. A primeira rodada usou H2 e também passou; a rodada final abaixo usou PostgreSQL real.
+- **23 CriticalFlowsTest**, **4 MeshContractTest**, **2 MeshConnectionTest**: **29 passados, zero falhas/erros/pulados** na rodada PostgreSQL + Mesh. Os testes de fluxos usam motor substituído; os dois de conexão usam servidor real. O inventário do teste está vazio, sem agente Windows.
+- Além dos 19 casos anteriores, cobre consentimento final versus primeiro bloco de imagem, recusa/parada/perda reportadas ao painel, indisponibilidade sem ACTIVE e preservação de início/término quando a sessão ocorre entre polls.
+- **12 testes Node**, zero falhas. Dez exercitam política/observador; dois usam sockets reais de loopback para encaminhar bytes de fixture e provar fechamento de ambos os lados na parada/recusa. Casos incluem VIEW, ausência de consentimento, permissões de proprietário, conexão única, lease/prazo, fragmentos/jumbo e perda de pong.
+- Os testes Node **não carregam o MeshAgent Windows**, não decodificam imagem de desktop e não aplicam mouse/teclado no SO. O wiring completo MeshAgent/core/relay/browser permanece para a prova Windows.
+- Instalação limpa npm ci reaplicou os patches versionados; motor iniciou com node-forge 1.4.1. npm audit: **zero vulnerabilidades** nessa consulta.
+- Frontend: tsc -b e vite build concluídos.
+- C#: dotnet publish Release win-x64 self-contained concluído. Artefatos em agent/publish e dist/uai-windows-lab.zip; sem assinatura Authenticode da Uai.
+- Git diff --check sem erros. Scripts PowerShell e Docker Compose não executados neste Linux.
 
-- `CriticalFlowsTest`: **19 passados**, zero falhas/erros. Inclui isolamento de chamados entre solicitantes, comentários não autorizados, criação de admin negada, controle sem permissão, VIEW não promovido a CONTROL, recusa sem emissão de link, solicitação pendente, expiração de pedido/login, revogação/encerramento local através da API do motor, falha de encerramento mantida como STOPPING, permissão retirada, offline, agente revogado, enrollment usado/expirado, CSRF/login/logout, rate limit, emissão única por login original, logout removendo compartilhamento, agente de outro dispositivo e histórico de chamado.
-- `MeshContractTest`: **4 passados**. Desktop-only, consent=72, prazo 1 min, viewOnly; resposta de remoção como objeto; remoção sem confirmação recusada; origem do link validada.
-- `MeshConnectionTest`: **2 passados**, contra MeshCentral **1.3.1 real**, em loopback com certificado gerado pelo motor e CA importada em truststore exclusivo. Leitura de inventário vazio via WSS autenticado e rejeição de credencial inválida. Não havia agente Windows e nenhuma tela foi transmitida.
-- **Total: 25 testes, zero falhas/erros/pulados na rodada final.** Por padrão, os 2 testes WSS são pulados quando não há MESH_SMOKE_URL configurada; 23 rodam sem motor.
-- React: `tsc -b && vite build` passou. Checagem `npm audit` do frontend incluindo ferramentas de desenvolvimento: **zero alertas** na resolução consultada.
-- Navegador Chromium/Playwright, API e PostgreSQL reais: login; dashboard; criação de chamado explicitamente identificado como teste; comentário; resolução; lista vazia de dispositivos; viewport 1440×1000 e 390×844; logout e troca para solicitante sem reaproveitar dados da identidade anterior. **Passou, sem exceções JavaScript.** Corrigida sobreposição de texto da lateral no layout móvel encontrada na inspeção visual. Dados exclusivos de banco descartável, sem simular computadores/sessões reais.
-- Agente: `dotnet build` passou com **0 warnings / 0 errors**. `dotnet publish -r win-x64 --self-contained true` gerou executável e runtime em `agent/publish` (artefato local ignorado). Executar no Windows continua pendente; não foi alegada validação de WinForms/DPAPI.
-- Docker indisponível neste host: Compose e imagens **não executados**. Backend e frontend foram iniciados diretamente, e o Mesh via Node.
+Evidência anterior, de 26/10: Playwright com API/PostgreSQL reais aprovou login, chamados/comentários/resolução, logout/troca de usuário e layout desktop/móvel. Não foi reclassificada como teste novo do viewer remoto.
 
-## Dependências do motor: bloqueio de produção
+## Dependências e assinatura
 
-O MeshCentral 1.2.5 da referência resolvia cinco alertas, três altos e dois moderados. Atualizar o motor para 1.3.1 sozinho não eliminou esses alertas. Foram aplicados overrides exatos e documentados: compression 1.8.2, express 4.22.3 e qs 6.16.1. O bootstrap Mesh tentava reinstalar versões antigas; `infra/mesh/patch-bootstrap.mjs` ajusta duas entradas específicas, verifica versão/conteúdo e preserva avisos Apache. O servidor foi iniciado com essa configuração e o canal WSS testado.
+O alerta antigo de node-forge 1.4.0 foi tratado pela versão upstream **1.4.1**, publicada em 27/10/2026. Não foi ocultado nem aplicado force update incompatível. A análise da cadeia, vulnerabilidade, explorabilidade não demonstrada e fontes está em [06-integracao-e-seguranca-remota.md](06-integracao-e-seguranca-remota.md).
 
-Na resolução final, `npm audit` ainda reporta **2 entradas de severidade alta**: node-forge e o pacote MeshCentral afetado transitivamente pelo mesmo problema. **Não são duas vulnerabilidades independentes comprovadas na aplicação.**
+O aviso Authenticode MeshService/MeshCmd foi reproduzido com 1.4.1; stack aponta leitura ASN.1 na preparação do timestamp. TLS/WSS verificado funcionou. O aviso não foi suprimido e permanece pendente de correção/validação do executável exato. C#/scripts também não estão assinados pela Uai.
 
-- [GHSA-86w9-cpqp-85rv — node-forge RSA PKCS#1 v1.5 signature verification](https://github.com/advisories/GHSA-86w9-cpqp-85rv). A versão disponível consultada, 1.4.0, permanece no intervalo afetado; não havia versão corrigida no npm consultado. Não foi implementado remendo criptográfico próprio nem determinada explorabilidade em cada caminho do MeshCentral.
-- Remediados na resolução: [compression](https://github.com/advisories/GHSA-vc2v-76pw-4v95), [qs, array limit](https://github.com/advisories/GHSA-x5fp-wj9c-mxmx) e [qs, isBuffer](https://github.com/advisories/GHSA-4mjr-xmp4-gh2g).
+## Reproduzir
 
-**Não liberar o motor em produção** antes de correção upstream ou avaliação técnica documentada de mitigação/aplicabilidade. `MESH_ENABLED=false` permanece padrão. Rede interna reduz exposição, mas não corrige a biblioteca. Não foi executada auditoria SCA completa do backend Java nem pentest; passar testes não prova ausência de vulnerabilidades.
+1. mvn -f backend/pom.xml test (H2 por padrão; testes WSS pulados sem variáveis).
+2. Para PostgreSQL real, usar banco descartável exclusivo e UAI_TEST_DATABASE/UAI_TEST_DB_USER/UAI_TEST_DB_PASSWORD. Os testes apagam tabelas da aplicação.
+3. Para WSS real, definir MESH_SMOKE_URL/USER/PASSWORD de motor exclusivo de teste, com patch instalado, e truststore Java contendo a CA correta. Executar Maven com -Djavax.net.ssl.trustStore=/caminho/truststore e senha apropriada.
+4. npm --prefix infra/mesh ci; npm --prefix infra/mesh test.
+5. npm --prefix frontend ci; npm --prefix frontend run build.
+6. dotnet publish agent/UaiSuporte.Agent -c Release -r win-x64 --self-contained true -o agent/publish.
 
-O MeshCentral ainda emitiu `Failed to sign ... Too few bytes to read ASN.1 value` para MeshService/MeshCmd de múltiplas arquiteturas ao carregar os agentes padrão. O servidor WSS ficou operacional, mas os binários e seu processo de assinatura **não foram homologados**. Tratar isso como pendência antes de distribuir agentes, não ignorar nem desabilitar proteção Windows.
+As fontes e testes ficam no Git. Logs locais em .tools e binários em dist/agent/publish são ignorados; não versionar dados, chaves ou credenciais do laboratório. O script scripts/Build-Windows.ps1 reproduz o pacote no Windows com SDK .NET 10.
 
-## Reproduzir WSS (opcional)
+## Próximo gate: suas máquinas
 
-Inicie um MeshCentral exclusivo de teste, com conta própria e certificado cuja CA esteja no truststore Java. Não use credenciais de produção. Defina `MESH_SMOKE_URL`, `MESH_SMOKE_USER`, `MESH_SMOKE_PASSWORD`, além das variáveis UAI_TEST_DATABASE/USER/PASSWORD se quiser PostgreSQL. Rode:
+Seguir [03-prova-windows.md](03-prova-windows.md), começando só por Test-UaiConnection.ps1 em A/B depois da preparação do servidor e CAs. Aguardar análise do resultado antes de instalar/aceitar sessões.
 
-```bash
-mvn -f backend/pom.xml test \
-  -Djavax.net.ssl.trustStore=/caminho/absoluto/truststore-de-teste \
-  -Djavax.net.ssl.trustStorePassword=senha-do-truststore
-```
-
-Nenhum teste cria sessão de desktop real. O teste de conexão consulta inventário e tenta autenticação inválida. Para a parte decisiva, siga **03-prova-windows.md** e registre resultados observados. Sem essa evidência, o projeto não atende ao critério principal de conclusão definido pelo solicitante.
+Pendente comprovar: instalação e assinatura do binário exato; atualização do core; dois consentimentos; tela renderizada; mouse/teclado reais; VIEW sem controle; recusa sem imagem; X interrompendo efetivamente; lease/expiração/revogação/queda cortando o fluxo; resultado correto no histórico. UAC/login/bloqueio/multimonitor/serviço continuam sem promessa de suporte.

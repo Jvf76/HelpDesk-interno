@@ -129,6 +129,13 @@ class MeshEngine implements RemoteEngine {
   }
 
   public Share create(String node, String guest, boolean viewOnly) {
+    var capabilities = command(Map.of("action", "uaiSessionCapabilities"));
+    if (capabilities.path("version").asInt() != 1
+        || !capabilities.path("relayTelemetry").asBoolean()
+        || !capabilities.path("oneConnection").asBoolean()
+        || capabilities.path("leaseSeconds").asInt() != 12)
+      throw new ResponseStatusException(
+          HttpStatus.BAD_GATEWAY, "Motor sem integração Uai compatível.");
     var result =
         command(
             Map.of(
@@ -153,7 +160,30 @@ class MeshEngine implements RemoteEngine {
     return new Share(id, link);
   }
 
-  public void remove(String node, String shareId) {
+  public Observation observe(String shareId, boolean renew, boolean stop) {
+    var s =
+        command(
+                Map.of(
+                    "action", "uaiSessionState", "publicid", shareId, "renew", renew, "stop", stop))
+            .path("session");
+    String state = s.path("state").asText();
+    if (!Set.of(
+            "UNKNOWN", "READY", "CONNECTING", "AWAITING_CONSENT", "CONSENTED", "ACTIVE", "ENDED")
+        .contains(state))
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Estado inesperado do motor.");
+    return new Observation(
+        state,
+        s.path("reason").isTextual() ? s.path("reason").asText() : null,
+        s.path("startedAt").isNumber() ? s.path("startedAt").asLong() : null,
+        s.path("consentAt").isNumber() ? s.path("consentAt").asLong() : null,
+        s.path("endedAt").isNumber() ? s.path("endedAt").asLong() : null);
+  }
+
+  public Observation remove(String node, String shareId) {
+    var observation = observe(shareId, false, true);
+    if (!"ENDED".equals(observation.state()))
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Motor não confirmou interrupção.");
+
     var result =
         command(Map.of("action", "removeDeviceShare", "nodeid", node, "publicid", shareId));
     if (!result.path("removed").isObject()
@@ -161,5 +191,6 @@ class MeshEngine implements RemoteEngine {
         && !"OK".equalsIgnoreCase(result.path("result").asText()))
       throw new ResponseStatusException(
           HttpStatus.BAD_GATEWAY, "Encerramento não confirmado pelo motor.");
+    return observation;
   }
 }

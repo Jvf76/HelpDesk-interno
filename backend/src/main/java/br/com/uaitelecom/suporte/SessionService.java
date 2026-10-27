@@ -23,6 +23,10 @@ class SessionService {
     var copy = new LinkedHashMap<>(s);
     copy.remove("user_token_hash");
     copy.remove("share_id");
+    if ("ACTIVE".equals(copy.get("status"))
+        && (copy.get("engine_seen_at") == null
+            || Db.instant(copy.get("engine_seen_at")).isBefore(Instant.now().minusSeconds(10))))
+      copy.put("status", "UNVERIFIED");
     return copy;
   }
 
@@ -175,10 +179,21 @@ class SessionService {
 
   synchronized void close(Map<String, Object> s, String result) {
     if (s.get("ended_at") != null) return;
+    OffsetDateTime confirmedEnd = OffsetDateTime.now();
     if (s.get("share_id") != null) {
       try {
         var d = db.one("SELECT * FROM device WHERE id=?", s.get("device_id"));
-        engine.remove(d.get("mesh_node").toString(), s.get("share_id").toString());
+        var finalState = engine.remove(d.get("mesh_node").toString(), s.get("share_id").toString());
+        if (finalState != null) {
+          db.exec(
+              "UPDATE remote_session SET started_at=COALESCE(started_at,?),"
+                  + " engine_consent_at=COALESCE(engine_consent_at,?),engine_seen_at=? WHERE id=?",
+              timestamp(finalState.startedAt()),
+              timestamp(finalState.consentAt()),
+              OffsetDateTime.now(),
+              s.get("id"));
+          if (finalState.endedAt() != null) confirmedEnd = timestamp(finalState.endedAt());
+        }
       } catch (RuntimeException e) {
         db.exec(
             "UPDATE remote_session SET status='STOPPING',result=? WHERE id=?", result, s.get("id"));
@@ -187,14 +202,78 @@ class SessionService {
     }
     db.exec(
         "UPDATE remote_session SET status='ENDED',ended_at=?,result=? WHERE id=?",
-        OffsetDateTime.now(),
+        confirmedEnd,
         result,
         s.get("id"));
     db.audit(s.get("technician_id").toString(), "SESSION_" + result, s.get("id"));
   }
 
+  void observe(Map<String, Object> s) {
+    try {
+      var observation = engine.observe(s.get("share_id").toString(), true, false);
+      String state = observation.state();
+      if ("UNKNOWN".equals(state)) {
+        close(s, "ENGINE_STATE_LOST");
+        return;
+      }
+      db.exec(
+          "UPDATE remote_session SET engine_seen_at=?, started_at=COALESCE(started_at,?),"
+              + " engine_consent_at=COALESCE(engine_consent_at,?) WHERE id=?",
+          OffsetDateTime.now(),
+          timestamp(observation.startedAt()),
+          timestamp(observation.consentAt()),
+          s.get("id"));
+      if ("ENDED".equals(state)) {
+        String reason =
+            Set.of(
+                        "LOCAL_STOP",
+                        "REJECTED",
+                        "PRIVACY_BAR_FAILED",
+                        "DISCONNECTED",
+                        "CONNECTION_LOST",
+                        "EXPIRED",
+                        "LEASE_LOST",
+                        "CONSENT_MISSING",
+                        "PROTOCOL_ERROR",
+                        "SERVER_STOP")
+                    .contains(Objects.toString(observation.reason(), ""))
+                ? observation.reason()
+                : "ENGINE_ENDED";
+        close(s, reason);
+      } else {
+        db.exec(
+            "UPDATE remote_session SET status=? WHERE id=?",
+            "CONSENTED".equals(state) ? "AWAITING_FRAME" : state,
+            s.get("id"));
+      }
+    } catch (RuntimeException e) {
+      // Never retain ACTIVE while engine state is unknown. Stop renewing and request closure.
+      close(s, "ENGINE_UNREACHABLE");
+    }
+  }
+
+  static OffsetDateTime timestamp(Long value) {
+    return value == null ? null : Instant.ofEpochMilli(value).atOffset(ZoneOffset.UTC);
+  }
+
   @Scheduled(fixedDelay = 3000)
   synchronized void sweep() {
+    for (var ended :
+        db.list(
+            "SELECT * FROM remote_session WHERE result='DISCONNECTED' AND ended_at>?",
+            OffsetDateTime.now().minusSeconds(15))) {
+      try {
+        var state = engine.observe(ended.get("share_id").toString(), false, false);
+        if (Set.of("LOCAL_STOP", "REJECTED", "PRIVACY_BAR_FAILED")
+            .contains(Objects.toString(state.reason(), ""))) {
+          db.exec("UPDATE remote_session SET result=? WHERE id=?", state.reason(), ended.get("id"));
+          db.audit(
+              ended.get("technician_id").toString(), "SESSION_" + state.reason(), ended.get("id"));
+        }
+      } catch (RuntimeException ignored) {
+        /* Keep confirmed disconnect, never invent a reason. */
+      }
+    }
     for (var s : db.list("SELECT * FROM remote_session WHERE ended_at IS NULL")) {
       if (s.get("status").equals("STOPPING")) {
         if (Instant.now().isAfter(Db.instant(s.get("expires_at")).plusSeconds(30))) {
@@ -205,6 +284,7 @@ class SessionService {
               s.get("id"));
         } else close(s, Objects.toString(s.get("result"), "STOP"));
       } else if (!valid(s)) close(s, "EXPIRED_OR_REVOKED");
+      else if (s.get("share_id") != null) observe(s);
     }
   }
 }

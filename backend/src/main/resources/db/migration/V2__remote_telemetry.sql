@@ -1,0 +1,3 @@
+ALTER TABLE remote_session ADD COLUMN started_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE remote_session ADD COLUMN engine_consent_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE remote_session ADD COLUMN engine_seen_at TIMESTAMP WITH TIME ZONE;

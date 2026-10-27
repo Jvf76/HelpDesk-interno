@@ -2,7 +2,7 @@
 
 Central interna da Uai Telecom: **Java 21 / Spring Boot, React / TypeScript, PostgreSQL e agente C# / .NET 10**. Integração experimental com MeshCentral/MeshAgent para acesso assistido. Interface pt-BR, sem dispositivos ou sessões fictícios.
 
-**Estado: implementação parcial, não homologada para produção.** Autenticação, autorização, dispositivos, chamados e ciclo de solicitações estão implementados. O agente compila, mas não foi executado em Windows. Acesso remoto real entre duas máquinas, auditoria da transmissão e encerramento físico ainda precisam ser validados. O motor vem desativado. Leia também os alertas de dependências em [resultados](docs/04-resultados.md).
+**Estado: implementação parcial, não homologada para produção.** Autenticação, autorização, dispositivos, chamados e ciclo de solicitações estão implementados. O agente compila, mas não foi executado em Windows. Integração com eventos do motor e lease implementada; acesso remoto entre duas máquinas e encerramento físico ainda precisam ser validados. O motor vem desativado. Leia também os alertas de dependências em [resultados](docs/04-resultados.md).
 
 ## Documentação
 
@@ -11,6 +11,7 @@ Central interna da Uai Telecom: **Java 21 / Spring Boot, React / TypeScript, Pos
 - [Prova reproduzível em dois Windows](docs/03-prova-windows.md)
 - [Resultados executados e trabalho pendente](docs/04-resultados.md)
 - [API e estados](docs/05-api.md)
+- [Agentes, integração, node-forge e assinaturas](docs/06-integracao-e-seguranca-remota.md)
 
 ## Servidor com Docker Compose
 
@@ -80,6 +81,8 @@ Para desinstalar: encerre a transmissão no X da barra MeshAgent, revogue o disp
 
 ```bash
 mvn -f backend/pom.xml test
+npm --prefix infra/mesh ci
+npm --prefix infra/mesh test
 npm --prefix frontend ci
 npm --prefix frontend run build
 dotnet build agent/UaiSuporte.Agent -c Release

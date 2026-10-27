@@ -15,12 +15,24 @@ class MeshContractTest {
     Map<String, Object> request;
 
     Stub(String response) {
-      super(true, "https://mesh.internal:4433", "test-user", "test-only", MeshContractTest.this.json);
+      super(
+          true, "https://mesh.internal:4433", "test-user", "test-only", MeshContractTest.this.json);
       this.response = response;
     }
 
     @Override
     com.fasterxml.jackson.databind.JsonNode command(Map<String, Object> data) {
+      if ("uaiSessionCapabilities".equals(data.get("action")))
+        return json.createObjectNode()
+            .put("version", 1)
+            .put("relayTelemetry", true)
+            .put("oneConnection", true)
+            .put("leaseSeconds", 12);
+      if ("uaiSessionState".equals(data.get("action"))) {
+        var root = json.createObjectNode();
+        root.putObject("session").put("state", "ENDED");
+        return root;
+      }
       request = data;
       try {
         return json.readTree(response);

@@ -46,6 +46,9 @@ export type RemoteSession = {
   expires_at: string;
   requested_at: string;
   ended_at: string | null;
+  started_at: string | null;
+  engine_seen_at: string | null;
+  engine_consent_at: string | null;
   result: string | null;
 };
 let csrf = "";
@@ -93,9 +96,14 @@ export const labels: Record<string, string> = {
   PENDING: "Aguardando consentimento local",
   CONSENTED: "Consentimento recebido",
   ISSUING: "Preparando acesso",
-  READY: "Link emitido • confirme a conexão na janela remota",
+  READY: "Acesso emitido • aguardando conexão",
+  CONNECTING: "Conectando ao computador",
+  AWAITING_CONSENT: "Aguardando confirmação no MeshAgent",
+  AWAITING_FRAME: "Autorizado • aguardando imagem",
+  ACTIVE: "Transmissão observada pelo servidor",
+  UNVERIFIED: "Sem confirmação atual • verifique a conexão",
   STOPPING: "Encerramento pendente no motor",
-  ENDED: "Solicitação encerrada",
+  ENDED: "Atendimento encerrado",
   VIEW: "Visualização",
   CONTROL: "Visualização e controle",
 };
