@@ -1,0 +1,22 @@
+server:
+  address: ${BIND_ADDRESS:127.0.0.1}
+  port: 8080
+  error:
+    include-message: never
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/uai}
+    username: ${POSTGRES_USER:uai}
+    password: ${POSTGRES_PASSWORD}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+uai:
+  secure-cookie: ${SECURE_COOKIE:true}
+  bootstrap-login: ${BOOTSTRAP_LOGIN:}
+  bootstrap-password: ${BOOTSTRAP_PASSWORD:}
+  mesh:
+    enabled: ${MESH_ENABLED:false}
+    url: ${MESH_URL:}
+    user: ${MESH_USER:}
+    password: ${MESH_PASSWORD:}

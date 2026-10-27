@@ -1,0 +1,15 @@
+.tools/
+.env
+**/target/
+**/node_modules/
+**/dist/
+**/bin/
+**/obj/
+**/appsettings.Local.json
+infra/mesh/data/
+*.log
+
+*.tsbuildinfo
+*.crt
+
+agent/publish/
