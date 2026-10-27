@@ -13,3 +13,5 @@ infra/mesh/data/
 *.crt
 
 agent/publish/
+
+**/__pycache__/

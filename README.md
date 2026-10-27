@@ -4,6 +4,10 @@ Central interna da Uai Telecom: **Java 21 / Spring Boot, React / TypeScript, Pos
 
 **Estado: implementação parcial, não homologada para produção.** Autenticação, autorização, dispositivos, chamados e ciclo de solicitações estão implementados. O agente compila, mas não foi executado em Windows. Integração com eventos do motor e lease implementada; acesso remoto entre duas máquinas e encerramento físico ainda precisam ser validados. O motor vem desativado. Leia também os alertas de dependências em [resultados](docs/04-resultados.md).
 
+## Laboratório nesta VM
+
+Ambiente nativo isolado em execução: painel https://suporte.internal:18443 e motor https://mesh.internal:14433. Acesso externo depende da origem autorizada. Consulte [endereços reais, CA, contas, operação e teste Windows](docs/07-laboratorio-vm.md). Isso não homologa o atendimento remoto.
+
 ## Documentação
 
 - [Referência, licença, decisões e arquitetura](docs/01-referencia-e-arquitetura.md)

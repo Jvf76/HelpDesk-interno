@@ -1,9 +1,14 @@
-param([string]$PanelHost = 'suporte.internal', [string]$MeshHost = 'mesh.internal')
+param(
+    [string]$PanelHost = 'suporte.internal',
+    [string]$MeshHost = 'mesh.internal',
+    [ValidateRange(1,65535)][int]$PanelPort = 443,
+    [ValidateRange(1,65535)][int]$MeshPort = 4433
+)
 $ErrorActionPreference = 'Stop'
 $failed = $false
 foreach ($target in @(
-    @{ Name = 'Painel'; HostName = $PanelHost; Port = 443; Url = "https://$PanelHost/" },
-    @{ Name = 'Motor'; HostName = $MeshHost; Port = 4433; Url = "https://${MeshHost}:4433/" }
+    @{ Name = 'Painel'; HostName = $PanelHost; Port = $PanelPort; Url = "https://${PanelHost}:$PanelPort/" },
+    @{ Name = 'Motor'; HostName = $MeshHost; Port = $MeshPort; Url = "https://${MeshHost}:$MeshPort/" }
 )) {
     $tcp = Test-NetConnection -ComputerName $target.HostName -Port $target.Port -WarningAction SilentlyContinue
     if (!$tcp.TcpTestSucceeded) {
