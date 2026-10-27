@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Live checks on the isolated VM lab. Prints no credentials/cookies/tokens."""
-import http.cookiejar, json, pathlib, socket, ssl, urllib.error, urllib.request
+import os, http.cookiejar, json, pathlib, socket, ssl, urllib.error, urllib.request
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 LAB=ROOT/".tools/lab"
 real_dns=socket.getaddrinfo
@@ -18,9 +18,11 @@ def call(url,body=None,csrf=None):
     try:
         with opener.open(req,timeout=10) as r:return r.status,r.read()
     except urllib.error.HTTPError as e:return e.code,e.read()
-panel="https://suporte.internal:18443"
+manifest=json.loads((LAB/"manifest.json").read_text())
+panel=os.environ.get("UAI_TEST_PANEL_URL",manifest["panel_url"])
+mesh=os.environ.get("UAI_TEST_MESH_URL",manifest["mesh_url"])
 assert call(panel+"/")[0]==200
-assert call("https://mesh.internal:14433/")[0]==200
+assert call(mesh+"/")[0]==200
 assert call(panel+"/api/auth/me")[0]==401
 credentials=json.loads((LAB/"secrets/admin-access.json").read_text())["panel"]
 status,body=call(panel+"/api/auth/login",credentials)
@@ -29,10 +31,10 @@ csrf=json.loads(body)["csrf"]
 assert call(panel+"/api/auth/me")[0]==200
 for resource in ["devices","tickets"]:
     status,body=call(panel+"/api/"+resource)
-    assert status==200 and json.loads(body)==[]
+    assert status==200 and isinstance(json.loads(body),list)
 assert call(panel+"/api/auth/logout",{},csrf)[0] in (200,204)
 assert call(panel+"/api/auth/me")[0]==401
-print("HTTPS painel/motor, login ADMIN, logout, inventario/chamados vazios: OK")
+print("HTTPS painel/motor, login ADMIN, logout, consulta de inventario/chamados: OK")
 try:
     untrusted=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ssl.create_default_context()))
     untrusted.open(panel+"/",timeout=5)

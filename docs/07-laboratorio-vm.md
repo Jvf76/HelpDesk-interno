@@ -1,4 +1,15 @@
-# Laboratório ativo nesta VM — 27/10/2026
+# Atualização de conectividade
+
+As portas18443/14433 foram restritas a loopback. A publicação externa pela
+porta443 está aplicada e foi acessada pelo Windows. Consulte
+[o procedimento e estado atual](08-publicacao-443.md) antes de usar os
+endereços com portas altas descritos abaixo.
+
+# Registro do provisionamento inicial — 27/10/2026
+
+As seções abaixo registram a configuração inicial. Para endereços, ACLs e
+validações atuais, prevalecem os documentos08 e09; não use os comandos antigos
+de liberação externa do labctl nem as URLs externas com portas altas.
 
 Este documento descreve a instalação real em execução. Não instala agentes e não homologa atendimento remoto Windows.
 

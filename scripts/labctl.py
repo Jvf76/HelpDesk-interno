@@ -21,6 +21,8 @@ if a.action in ("start", "stop", "restart"):
 elif a.action == "status":
     run("systemctl", "--user", "--no-pager", "status", "uai-lab.target", "uai-lab-postgres", "uai-lab-backend", "uai-lab-mesh", "uai-lab-web")
 else:
+    if m.get("edge443_status") == "active":
+        sys.exit("ACL da porta 443 gerenciada pelo root em /etc/nginx/uai-lab-443/allow.conf; veja docs/08-publicacao-443.md.")
     networks = []
     if a.action == "allow":
         if not a.network: sys.exit("Informe IP/CIDR de origem do Windows ou NAT/VPN.")

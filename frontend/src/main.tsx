@@ -1,3 +1,4 @@
+import { isDesktop } from "./desktop";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -52,21 +53,29 @@ function App() {
   const staff = user?.role !== "SOLICITANTE",
     admin = user?.role === "ADMIN";
   useEffect(() => {
-    api<User>("/auth/me")
+    api<User>("/auth/me", "GET", undefined, false)
       .then((u) => {
         authenticated.current = true;
         setUser(u);
         setCsrf(u.csrf);
       })
-      .catch(() => {})
+      .catch((e) => { if (e.status !== 401) setError(e.message || "Servidor indisponível. Confira a conexão."); })
       .finally(() => setInitial(false));
     const handler = () => {
-      if (authenticated.current) {
-        window.location.reload();
-        return;
-      }
+      if (!authenticated.current) return;
+      authenticated.current = false;
+      setCsrf("");
       setUser(null);
       setSession(null);
+      setDevices([]);
+      setTickets([]);
+      setUsers([]);
+      setDetail(null);
+      setHistory(null);
+      setSelected(null);
+      setCode("");
+      setModal("");
+      setPage("dashboard");
       setError("Sessão expirada. Entre novamente.");
     };
     window.addEventListener("unauthorized", handler);
@@ -241,7 +250,7 @@ function App() {
             <button className="primary" disabled={busy}>
               {busy ? "Entrando…" : "Entrar no painel"}
             </button>
-            <small>Precisa de acesso? Procure o administrador de TI.</small>
+            <small>{isDesktop ? "Aplicativo Técnico • interface incorporada • versão 0.2.0" : "Precisa de acesso? Procure o administrador de TI."}</small>
           </form>
         </main>
       </div>
@@ -309,6 +318,9 @@ function App() {
             onClick={() =>
               void action(async () => {
                 await api("/auth/logout", "POST");
+                authenticated.current = false;
+                setCsrf("");
+                setError("");
                 window.location.reload();
                 setUser(null);
                 setSession(null);
@@ -882,7 +894,7 @@ function App() {
                   MeshAgent solicitará uma segunda confirmação antes de
                   transmitir a tela.
                 </p>
-                {session.status === "CONSENTED" && (
+                {session.status === "CONSENTED" && !isDesktop && (
                   <button
                     className="primary"
                     disabled={busy}
@@ -1192,17 +1204,18 @@ function App() {
                   }
                   tone={selected.online ? "good" : "muted"}
                 />
+                {isDesktop && <p>Prova desktop: solicitações remotas desativadas até validar login e logout.</p>}
                 {staff && (
                   <div className="actions">
                     <button
-                      disabled={!selected.online || busy}
+                      disabled={isDesktop || !selected.online || busy}
                       onClick={() => void requestRemote(selected, "VIEW")}
                     >
                       Solicitar visualização
                     </button>
                     <button
                       className="primary"
-                      disabled={!selected.online || busy}
+                      disabled={isDesktop || !selected.online || busy}
                       onClick={() => void requestRemote(selected, "CONTROL")}
                     >
                       Solicitar controle

@@ -1,12 +1,17 @@
+Aplicativo Técnico Windows com React incorporado: [prova desktop e instruções](docs/09-tecnico-desktop.md).
+
+Publicação do laboratório no Nginx existente pela porta443:
+[procedimento e estado da validação](docs/08-publicacao-443.md).
+
 # Uai Suporte
 
-Central interna da Uai Telecom: **Java 21 / Spring Boot, React / TypeScript, PostgreSQL e agente C# / .NET 10**. Integração experimental com MeshCentral/MeshAgent para acesso assistido. Interface pt-BR, sem dispositivos ou sessões fictícios.
+Central interna da Uai Telecom: **Java 21 / Spring Boot, React / TypeScript, PostgreSQL e agente C# / .NET 10**. Integração experimental com MeshCentral/MeshAgent para acesso assistido. Interface pt-BR, sem dispositivos ou sessões fictícios. Aplicativo Técnico Windows com React incorporado: abertura, login e logout confirmados pelo operador; viewer e atendimento remoto ainda pendentes.
 
 **Estado: implementação parcial, não homologada para produção.** Autenticação, autorização, dispositivos, chamados e ciclo de solicitações estão implementados. O agente compila, mas não foi executado em Windows. Integração com eventos do motor e lease implementada; acesso remoto entre duas máquinas e encerramento físico ainda precisam ser validados. O motor vem desativado. Leia também os alertas de dependências em [resultados](docs/04-resultados.md).
 
 ## Laboratório nesta VM
 
-Ambiente nativo isolado em execução: painel https://suporte.internal:18443 e motor https://mesh.internal:14433. Acesso externo depende da origem autorizada. Consulte [endereços reais, CA, contas, operação e teste Windows](docs/07-laboratorio-vm.md). Isso não homologa o atendimento remoto.
+Ambiente nativo isolado em execução: painel https://suporte.internal e motor https://mesh.internal, ambos pela porta443. Portas internas18443/14433 restritas a loopback. Acesso externo depende da origem autorizada. Consulte [endereços reais, CA, contas, operação e teste Windows](docs/07-laboratorio-vm.md). Isso não homologa o atendimento remoto.
 
 ## Documentação
 

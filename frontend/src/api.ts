@@ -1,3 +1,4 @@
+import { isDesktop, desktopRequest } from "./desktop";
 export type User = {
   id: string;
   name: string;
@@ -59,8 +60,9 @@ export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
+  notifyUnauthorized = true,
 ): Promise<T> {
-  const r = await fetch("/api" + path, {
+  const r = isDesktop ? await desktopRequest(path, method, body, csrf) : await fetch("/api" + path, {
     method,
     credentials: "same-origin",
     headers: {
@@ -73,9 +75,9 @@ export async function api<T>(
     const error = await r
       .json()
       .catch(() => ({ message: "Não foi possível concluir a operação." }));
-    if (r.status === 401 && path !== "/auth/login")
+    if (notifyUnauthorized && r.status === 401 && path !== "/auth/login")
       window.dispatchEvent(new Event("unauthorized"));
-    throw new Error(error.message ?? "Operação recusada.");
+    throw Object.assign(new Error(error.message ?? "Operação recusada."), { status: r.status });
   }
   return r.status === 204 || r.headers.get("content-length") === "0"
     ? (undefined as T)
