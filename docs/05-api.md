@@ -1,69 +1,80 @@
-# API do piloto
+# API atual — acesso remoto interno
 
-Base `/api`, JSON, HTTPS. Erros `{ "message": "..." }`, status 400/401/403/404/409/429/502/503. Identificadores UUID. Campos de resposta persistidos usam snake_case; corpos Java usam camelCase conforme abaixo.
+Base /api. Sessão de usuário em cookie UAI_SESSION HttpOnly/Secure/SameSiteStrict;
+CSRF em X-CSRF-Token nas mutações. Desktop guarda cookie em memória nativa e
+valida a origem da ponte. Não existe endpoint público para obter viewer sem
+login, permissão e consentimento. Agente usa Bearer individual, hash no banco.
 
-## Autenticação
+- POST /auth/login: login/password, rate limit, retorna usuário e CSRF.
+- GET /auth/me; POST /auth/logout: consulta/revogação real.
+- GET /users; POST /users; PUT /users/{id}: equipe/admin conforme autorização.
+  Perfis usados no produto: ADMIN e TECNICO. SOLICITANTE pode existir em dados
+  legados, não recebe permissão de controle e não entra no aplicativo Técnico.
+- GET /devices?q=&location=: somente dispositivos autorizados; busca nome,
+  UUID, setor e responsável; estado pelo heartbeat em30s, revogação sobrepõe.
+- POST /devices; PUT /devices/{id}: admin, nome/setor/localidade/responsável/node.
+- POST /devices/{id}/enrollment: código de uso único com prazo10min.
+- POST /devices/{id}/revoke: invalida credencial e encerra sessões.
+- GET/PUT /devices/{id}/permissions; DELETE /devices/{id}/permissions/{userId}:
+  admin, VIEW ou CONTROL por técnico ativo.
+- GET /devices/{id}/history: somente sessões, com técnico, horários e resultado.
+- POST /agent/enroll: code/os, retorna deviceId/token; sem senha de usuário.
+- POST /agent/heartbeat: os, retorna solicitações e horário do servidor.
+- POST /agent/offline: identidade do dispositivo; encerra pedidos e remove presença.
+- POST /agent/sessions/{id}/{decision}: accept, accept-view, reject ou stop.
+  accept-view reduz CONTROL para VIEW; não existe escalada local de VIEW para CONTROL.
+- POST /sessions: deviceId, mode VIEW/CONTROL; exige staff, permissão e presença.
+- GET /sessions/{id}: técnico proprietário/admin; estado confirmado pelo motor.
+- POST /sessions/{id}/launch: após consentimento, mesmo login/cookie da solicitação;
+  retorna JSON authCookie/viewOnly/expiresAt. Somente aplicação nativa encaminha
+  ao viewer local; não registrar token nem persistir em arquivo. Sem link/browser.
+- POST /sessions/{id}/stop: encerra transporte, registra técnico e resultado.
 
-- `POST /auth/login`: `{login,password}` → `{id,name,role,csrf}` e cookie HttpOnly. 10 falhas/15 min por IP/conta.
-- `GET /auth/me`: identidade atual e token CSRF.
-- `POST /auth/logout`: revoga cookie e solicita encerramento das solicitações do login.
-- Toda mutação autenticada por cookie exige `X-CSRF-Token`. Agentes usam Authorization Bearer, nunca o cookie do usuário.
+Estados: PENDING, CONSENTED, ISSUING, READY, CONNECTING, AWAITING_CONSENT,
+AWAITING_FRAME, ACTIVE, STOPPING, UNVERIFIED, ENDED. Recusa/expiração aparecem
+no resultado final. ACTIVE exige bloco de imagem no relay; renderização é
+confirmada separadamente pelo viewer. Sem confirmação, não manter indicação ativa.
 
-## Administração e dispositivos
+Não há rotas de chamados. Tabelas/coluna ticket_id legadas ficam apenas por
+preservação de dados; não são lidas para autorizar/iniciar sessão nem expostas.
+No laboratório, IP do token Mesh é obtido do header sobrescrito pelos proxies
+somente quando a conexão da API vem de loopback. Outra topologia exige configurar
+proxies confiáveis explicitamente; não aceitar X-Forwarded-For arbitrário da internet.
+# Atualização 0.4 — aplicativo único
 
-- `GET /users`: equipe técnica/admin. Retorna id/name/login/role/active, sem hash.
-- `POST /users`: admin; `{name,login,password,role}`. Roles ADMIN, TECNICO, SOLICITANTE.
-- `PUT /users/{id}`: admin; `{role,active}`. Revoga sessões existentes da conta. Não permite alterar próprio perfil aqui.
-- `GET /devices?q=&location=`: somente autorizados ou de responsabilidade do solicitante. `online` calculado a cada leitura.
-- `POST /devices`: admin; `{name,location,department,ownerId?,meshNode?}` → `{id,code,expiresIn}`. Código é exibido uma única vez.
-- `PUT /devices/{id}`: admin; mesmos metadados. Não altera cadastro durante solicitação remota aberta.
-- `POST /devices/{id}/enrollment`: admin; substitui código de dispositivo ainda sem agente. Não reativa revogado.
-- `POST /devices/{id}/revoke`: admin; apaga credenciais, revoga dispositivo e solicita encerramento remoto.
-- `GET /devices/{id}/permissions`: admin.
-- `PUT /devices/{id}/permissions`: admin; `{userId,control}` concede visualização e, opcionalmente, controle a técnico ativo.
-- `DELETE /devices/{id}/permissions/{userId}`: admin; remove permissão e reavalia sessão.
-- `GET /devices/{id}/history`: equipe autorizada; chamados e solicitações remotas do computador.
+O fluxo novo usa `POST /api/connections` com `{code,mode}` e `GET /api/connections`
+para o histórico privado. Qualquer conta ativa pode solicitar; não exige papel
+técnico nem grant prévio. O código é o UUID real do destino, não credencial.
+Conta/IP/destino são limitados; consentimento local e revalidação contínua são
+obrigatórios. Endpoints /sessions/{id}/launch e /stop continuam vinculados ao
+solicitante. POST /sessions e grants abaixo são compatibilidade legada, não o
+fluxo do aplicativo novo. Consulte [contrato e limites atuais](14-aplicativo-unico.md).
 
-## Agente
+## Cadastro integrado LAB 0.5
 
-- `POST /agent/enroll`: `{code,os}` → `{deviceId,token}`; código válido, não consumido, com prazo de 10 min. Retorna token somente aqui.
-- `POST /agent/heartbeat`: Authorization `Bearer <token>`; `{os}` → `{requests,serverTime}`. Cliente consulta a cada 5 s; servidor considera offline após 30 s.
-- `POST /agent/sessions/{id}/accept`, `/reject`, `/stop`: só o agente do dispositivo daquela solicitação.
+- POST /api/agent/binding: bearer individual; desafio de 120s e MSH do broker.
+- POST /api/agent/binding/confirm: consulta prova nativa autenticada; não recebe Node ID
+  do cliente. Unicidade assegurada no banco. Idempotente após confirmação.
+- POST /api/agent/unregister: revoga somente credencial autenticada, encerra sessões
+  e preserva cadastro público/histórico para recuperação administrativa.
+- Heartbeat rejeitado antes do vínculo Mesh. Edição de metadados preserva Node ID;
+  formulário não atribui nem troca identidade Mesh. Recuperação exige ADMIN.
 
-A identidade C# não dá acesso à API de usuários ou a qualquer endpoint de execução de comandos. O Node ID do MeshCentral não é aceito do agente; associação é administrativa.
+Não registrar respostas de binding: contêm desafio temporário.
 
-## Chamados
+## Cadastro após login — LAB 0.5.3
 
-- `GET /tickets?status=&priority=&technician=&location=`: equipe vê fila; solicitante vê apenas os próprios. Limite de 500 mais recentes.
-- `POST /tickets`: `{title,description,category,priority,deviceId?}`. O solicitante é sempre quem autenticou.
-- `GET /tickets/{id}`: detalhe, eventos e solicitações remotas; valida dono/perfil.
-- `PUT /tickets/{id}`: equipe; `{status,priority,technicianId?}`. Gera evento com antes/depois.
-- `POST /tickets/{id}/comments`: `{body}`; dono ou equipe, gera evento imutável pela API.
-- Estados ABERTO, EM_ATENDIMENTO, AGUARDANDO, RESOLVIDO; prioridades BAIXA, NORMAL, ALTA, URGENTE.
+`POST /api/devices/register` exige sessão de usuário ativo e CSRF, para qualquer
+perfil. Body: `installationId` UUID privado persistido, `credential` aleatória
+base64url de 43 caracteres, `name` e `os`. Resposta: `deviceId` público, sem token.
+Idempotência por instalação/conta/credencial; revogados não são reativados.
+Limite: cinco novos computadores por hora/conta. A credencial segue individual e
+revogável; disponibilidade depende do vínculo Mesh e do heartbeat.
 
-## Solicitações remotas
+## Dispositivos sem login de usuário — LAB 0.6.0
 
-- `POST /sessions`: `{deviceId,mode,ticketId?}`; mode VIEW/CONTROL. Ticket, se informado, deve estar associado ao mesmo computador. Requer agente online, autorização e motor habilitado.
-- `GET /sessions/{id}`: técnico que solicitou ou administrador; sem tokens/share ID.
-- `POST /sessions/{id}/launch`: só o login original, após aceite; retorna `{url}` efêmera. Pode ser emitida apenas uma vez. Não armazene essa URL em logs.
-- `POST /sessions/{id}/stop`: solicitante técnico/admin; pode retornar status STOPPING se o motor não confirmar remoção.
+Contrato atual: [ativação e autenticação de dispositivo](21-ativacao-dispositivo.md). `/devices/register` foi retirado de uso (410); usuários web continuam usando login/cookie/CSRF. Tokens administrativos não concedem sessão remota.
 
-```mermaid
-stateDiagram-v2
- [*] --> PENDING: pedido autorizado / 60 s
- PENDING --> CONSENTED: aceite C#
- PENDING --> ENDED: recusa / expiração / revogação
- CONSENTED --> ISSUING: emissão pela mesma sessão de login
- ISSUING --> READY: compartilhamento emitido pelo Mesh
- ISSUING --> ENDED: falha do motor
- READY --> CONNECTING: viewer conectado
- CONNECTING --> AWAITING_CONSENT: prompt MeshAgent
- AWAITING_CONSENT --> AWAITING_FRAME: aceite final
- AWAITING_FRAME --> ACTIVE: bloco completo de imagem no relay
- ACTIVE --> ENDED: corte confirmado no motor
- READY --> STOPPING: remoção solicitada sem confirmação
- READY --> ENDED: remoção confirmada
- STOPPING --> ENDED: confirmação ou prazo / resultado não confirmado
-```
+## Inventário e monitoramento (V8)
 
-READY não é ACTIVE. ACTIVE exige imagem observada no relay. AWAITING_FRAME é o consentimento final; CONSENTED é o aceite preliminar C#. started_at/engine_consent_at/engine_seen_at vêm da integração. ended_at usa o término informado pelo motor quando disponível. Sem confirmação não se afirma corte físico: STOPPING/EXPIRED_UNCONFIRMED. UNVERIFIED é um estado de apresentação quando a confirmação fica antiga ou o painel perde contato. Polling de 3 s, lease de 12 s, prazo absoluto de 60 s. Ver [detalhes e limites](06-integracao-e-seguranca-remota.md).
+Consulte [contratos, permissões e frequência](24-inventario-monitoramento.md#api-adicionada). O inventário usa paginação no backend; os endpoints de agente exigem identidade individual e preservam o vínculo da ativação.

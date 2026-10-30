@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Library</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><EnableWindowsTargeting>true</EnableWindowsTargeting><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>UaiSuporte.Receiving</AssemblyName><Version>0.6.1</Version></PropertyGroup>
+ <ItemGroup><PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0"/></ItemGroup>
+ <ItemGroup><Compile Include="../UaiSuporte.Setup/Authenticode.cs" Link="Security/Authenticode.cs"/></ItemGroup>
+ <ItemGroup><Content Include="../../agent/licenses/*" Link="licenses/%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
+<ItemGroup><Compile Include="../UaiSuporte.Setup/Policy.cs" Link="Policy.cs" /></ItemGroup>
+</Project>

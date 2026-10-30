@@ -96,3 +96,13 @@ test('half-open socket loses session despite backend lease renewals',t=>{
   assert.equal(fresh.status('owner','probe',false,false).reason,'CONNECTION_LOST');
   assert.ok(pings>0);assert.equal(killed,1);
 });
+test('desktop bootstrap binds owner, consent, mode, expiry and client IP; closed sessions denied',()=>{
+ const entry={publicid:randomUUID(),userid:'user//integration',nodeid:'node//test',guestName:'TI • Uai '+randomUUID(),p:2,consent:72,expireTime:Date.now()+60000,viewOnly:true};
+ engine.register(entry);
+ assert.equal(engine.viewerCookie('user//other',entry.publicid,'','127.0.0.1'),null);
+ assert.equal(engine.viewerCookie(entry.userid,entry.publicid,'','not-an-ip'),null);
+ const c=engine.viewerCookie(entry.userid,entry.publicid,'','127.0.0.1');
+ assert.equal(c.vo,1);assert.equal(c.cf,72);assert.equal(c.expire,entry.expireTime);assert.equal(c.ip,'127.0.0.1');assert.equal(c.p,2);
+ engine.status(entry.userid,entry.publicid,false,true);
+ assert.equal(engine.viewerCookie(entry.userid,entry.publicid,'','127.0.0.1'),null);
+});

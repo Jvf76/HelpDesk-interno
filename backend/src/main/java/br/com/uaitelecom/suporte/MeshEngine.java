@@ -128,6 +128,11 @@ class MeshEngine implements RemoteEngine {
     }
   }
 
+  public java.util.Map<String,Object> enrollment(String operation, UUID device) {
+    var result=command(Map.of("action","uaiEnrollment","operation",operation,"device",device.toString()));
+    return json.convertValue(result, new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String,Object>>(){});
+  }
+
   public Share create(String node, String guest, boolean viewOnly) {
     var capabilities = command(Map.of("action", "uaiSessionCapabilities"));
     if (capabilities.path("version").asInt() != 1
@@ -158,6 +163,14 @@ class MeshEngine implements RemoteEngine {
       throw new ResponseStatusException(
           HttpStatus.BAD_GATEWAY, "Resposta inesperada do motor. Confira URL e porta.");
     return new Share(id, link);
+  }
+
+  public Map<String,Object> viewer(String shareId, String clientIp) {
+    var data=command(Map.of("action","uaiViewerBootstrap","publicid",shareId,"clientIp",clientIp));
+    String token=data.path("authCookie").asText();
+    if(token.isBlank() || !data.path("expiresAt").canConvertToLong())
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"Bootstrap inválido do visualizador.");
+    return Map.of("authCookie",token,"viewOnly",data.path("viewOnly").asBoolean(),"expiresAt",data.path("expiresAt").asLong());
   }
 
   public Observation observe(String shareId, boolean renew, boolean stop) {

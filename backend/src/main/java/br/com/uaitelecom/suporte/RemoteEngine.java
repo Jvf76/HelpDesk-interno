@@ -11,6 +11,8 @@ interface RemoteEngine {
 
   Observation observe(String shareId, boolean renew, boolean stop);
 
+  java.util.Map<String,Object> viewer(String shareId, String clientIp);
+
   boolean enabled();
 
   Share create(String node, String guest, boolean viewOnly);

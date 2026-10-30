@@ -24,17 +24,27 @@ mesh=os.environ.get("UAI_TEST_MESH_URL",manifest["mesh_url"])
 assert call(panel+"/")[0]==200
 assert call(mesh+"/")[0]==200
 assert call(panel+"/api/auth/me")[0]==401
+assert call(panel+"/api/agent/identity")[0]==401
+assert call(panel+"/api/devices/register",{})[0]==401
 credentials=json.loads((LAB/"secrets/admin-access.json").read_text())["panel"]
 status,body=call(panel+"/api/auth/login",credentials)
 assert status==200 and json.loads(body)["role"]=="ADMIN"
 csrf=json.loads(body)["csrf"]
+assert call(panel+"/api/devices/register",{})[0]==403
+assert call(panel+"/api/devices/register",{},csrf)[0]==400
+assert call(panel+"/api/tickets")[0]==404
 assert call(panel+"/api/auth/me")[0]==200
-for resource in ["devices","tickets"]:
+for resource in ["devices", "connections"]:
     status,body=call(panel+"/api/"+resource)
     assert status==200 and isinstance(json.loads(body),list)
+status,body=call(panel+"/api/inventory?page=0&size=1")
+assert status==200 and len(json.loads(body)["items"])<=1
+for resource in ["monitoring/summary","monitoring/config"]:
+    assert call(panel+"/api/"+resource)[0]==200
+assert call(panel+"/remote-viewer/index.html")[0]==200
 assert call(panel+"/api/auth/logout",{},csrf)[0] in (200,204)
 assert call(panel+"/api/auth/me")[0]==401
-print("HTTPS painel/motor, login ADMIN, logout, consulta de inventario/chamados: OK")
+print("HTTPS painel/motor, login ADMIN, logout, dispositivos e historico privado de conexoes: OK")
 try:
     untrusted=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ssl.create_default_context()))
     untrusted.open(panel+"/",timeout=5)

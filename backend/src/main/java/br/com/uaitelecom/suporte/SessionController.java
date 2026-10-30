@@ -17,12 +17,11 @@ class SessionController {
 
   record Request(
       @NotNull UUID deviceId,
-      @NotNull @Pattern(regexp = "VIEW|CONTROL") String mode,
-      UUID ticketId) {}
+      @NotNull @Pattern(regexp = "VIEW|CONTROL") String mode) {}
 
   @PostMapping
   Map<String, Object> create(@Valid @RequestBody Request b, HttpServletRequest r) {
-    return service.request(Security.actor(r), b.deviceId(), b.mode(), b.ticketId());
+    return service.request(Security.actor(r), b.deviceId(), b.mode());
   }
 
   @GetMapping("/{id}")
@@ -32,8 +31,12 @@ class SessionController {
   }
 
   @PostMapping("/{id}/launch")
-  Map<String, String> launch(@PathVariable UUID id, HttpServletRequest r) {
-    return service.launch(Security.actor(r), id);
+  Map<String, Object> launch(@PathVariable UUID id, HttpServletRequest r) {
+    String ip=r.getRemoteAddr();
+    // Lab API binds to loopback; both reverse proxies overwrite the forwarding header.
+    if ((ip.equals("127.0.0.1") || ip.equals("0:0:0:0:0:0:0:1")) && r.getHeader("X-Forwarded-For")!=null)
+      ip=r.getHeader("X-Forwarded-For");
+    return service.viewer(Security.actor(r), id, ip);
   }
 
   @PostMapping("/{id}/stop")

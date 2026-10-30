@@ -2,7 +2,7 @@ import { isDesktop, desktopRequest } from "./desktop";
 export type User = {
   id: string;
   name: string;
-  role: "ADMIN" | "TECNICO" | "SOLICITANTE";
+  role: "ADMIN" | "TECNICO" | "SOLICITANTE" | "OPERADOR" | "LEITURA";
   csrf: string;
   login?: string;
   active?: boolean;
@@ -14,30 +14,11 @@ export type Device = {
   location: string;
   department: string;
   owner_id: string | null;
+  owner_name?: string;
   mesh_node: string | null;
   online: boolean;
   revoked: boolean;
   last_seen: string | null;
-};
-export type Ticket = {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  priority: string;
-  status: string;
-  device_id: string | null;
-  requester_name?: string;
-  technician_id: string | null;
-  created_at: string;
-  events?: {
-    id: string;
-    body: string;
-    kind: string;
-    author: string;
-    created_at: string;
-  }[];
-  sessions?: RemoteSession[];
 };
 export type RemoteSession = {
   id: string;
@@ -51,6 +32,8 @@ export type RemoteSession = {
   engine_seen_at: string | null;
   engine_consent_at: string | null;
   result: string | null;
+  technician_name?: string;
+  requester_name?: string;
 };
 let csrf = "";
 export function setCsrf(value: string) {
@@ -62,52 +45,30 @@ export async function api<T>(
   body?: unknown,
   notifyUnauthorized = true,
 ): Promise<T> {
-  const r = isDesktop ? await desktopRequest(path, method, body, csrf) : await fetch("/api" + path, {
-    method,
-    credentials: "same-origin",
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...(method !== "GET" ? { "X-CSRF-Token": csrf } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const r = isDesktop
+    ? await desktopRequest(path, method, body, csrf)
+    : await fetch("/api" + path, {
+        method,
+        credentials: "same-origin",
+        headers: {
+          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(method !== "GET" ? { "X-CSRF-Token": csrf } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
   if (!r.ok) {
     const error = await r
       .json()
       .catch(() => ({ message: "Não foi possível concluir a operação." }));
-    if (notifyUnauthorized && r.status === 401 && path !== "/auth/login")
+    if (!isDesktop && notifyUnauthorized && r.status === 401 && path !== "/auth/login")
       window.dispatchEvent(new Event("unauthorized"));
-    throw Object.assign(new Error(error.message ?? "Operação recusada."), { status: r.status });
+    throw Object.assign(new Error(error.message ?? "Operação recusada."), {
+      status: r.status,
+    });
   }
   return r.status === 204 || r.headers.get("content-length") === "0"
     ? (undefined as T)
     : await r.text().then((text) => (text ? JSON.parse(text) : undefined));
 }
-export const labels: Record<string, string> = {
-  ADMIN: "Administrador",
-  TECNICO: "Técnico",
-  SOLICITANTE: "Solicitante",
-  ABERTO: "Aberto",
-  EM_ATENDIMENTO: "Em atendimento",
-  AGUARDANDO: "Aguardando",
-  RESOLVIDO: "Resolvido",
-  BAIXA: "Baixa",
-  NORMAL: "Normal",
-  ALTA: "Alta",
-  URGENTE: "Urgente",
-  PENDING: "Aguardando consentimento local",
-  CONSENTED: "Consentimento recebido",
-  ISSUING: "Preparando acesso",
-  READY: "Acesso emitido • aguardando conexão",
-  CONNECTING: "Conectando ao computador",
-  AWAITING_CONSENT: "Aguardando confirmação no MeshAgent",
-  AWAITING_FRAME: "Autorizado • aguardando imagem",
-  ACTIVE: "Transmissão observada pelo servidor",
-  UNVERIFIED: "Sem confirmação atual • verifique a conexão",
-  STOPPING: "Encerramento pendente no motor",
-  ENDED: "Atendimento encerrado",
-  VIEW: "Visualização",
-  CONTROL: "Visualização e controle",
-};
 export const date = (v: string | null | undefined) =>
   v ? new Date(v).toLocaleString("pt-BR") : "Sem registro";

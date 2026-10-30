@@ -8,11 +8,17 @@ const string origin=ApiSession.LocalOrigin+"/index.html";
 int count=0;
 void Check(bool value,string name) { if(!value) throw new Exception("FAIL: "+name); count++; Console.WriteLine("OK: "+name); }
 Check(ApiSession.TrustedSource(origin),"origem local aceita");
-foreach(var source in new[]{"https://evil.invalid/index.html", "https://uai-technician.invalid.evil/index.html", "http://uai-technician.invalid/index.html", "https://x@uai-technician.invalid/index.html",origin+"?url=evil", "https://uai-technician.invalid/other.html"})
+foreach(var source in new[]{"https://evil.invalid/index.html", "https://uai-suporte.invalid.evil/index.html", "http://uai-technician.invalid/index.html", "https://x@uai-technician.invalid/index.html",origin+"?url=evil", "https://uai-suporte.invalid/other.html"})
  Check(!ApiSession.TrustedSource(source),"origem indevida rejeitada");
-foreach(var path in new[]{"//evil/api", "https://evil/api", "/../auth/me", "/devices?url=x", "/devices/%2e%2e", "/agent/heartbeat", "/sessions"})
+foreach(var path in new[]{"//evil/api", "https://evil/api", "/../auth/me", "/devices?url=x", "/devices/%2e%2e", "/agent/heartbeat" , "/tickets"})
  Check(!ApiSession.Allowed("POST",path),"rota indevida rejeitada");
-Check(!ApiSession.Allowed("POST","/sessions/00000000-0000-0000-0000-000000000001/launch"),"launch remoto bloqueado nesta prova");
+Check(ApiSession.Allowed("POST","/sessions/00000000-0000-0000-0000-000000000001/launch"),"launch remoto autorizado somente pela API");
+Check(ViewerPolicy.Navigation(ViewerPolicy.Page),"viewer local permitido");
+Check(!ViewerPolicy.Navigation("https://mesh.internal/sharing?c=x"),"HTML remoto bloqueado");
+Check(ViewerPolicy.Relay("wss://mesh.internal/meshrelay.ashx?auth=test"),"relay exato permitido");
+Check(!ViewerPolicy.Relay("wss://mesh.internal.evil/meshrelay.ashx"),"relay externo bloqueado");
+Check(!ViewerPolicy.Asset("https://mesh.internal/uai-viewer/%2e%2e/secrets"),"travessia bloqueada");
+Check(!ApiSession.Allowed("GET","/tickets"),"chamados removidos da ponte");
 using(var api=new ApiSession(new Stub())) {
  Check((await api.Send("https://evil.invalid", "/auth/me","GET",null,null)).Status==403,"ponte rejeita fonte externa");
  Check((await api.Send(origin,"/auth/logout","POST","{}",null)).Status==403,"mutacao sem CSRF bloqueada");
@@ -24,8 +30,8 @@ foreach(var (mode,status) in new[]{("redirect",502),("html",502),("tls",495),("o
 }
 if(args.Length>0 && args[0]=="resources") {
  using var pe=new PEReader(File.OpenRead(args[1]));var metadata=pe.GetMetadataReader();
- var names=metadata.ManifestResources.Select(h=>metadata.GetString(metadata.GetManifestResource(h).Name)).ToArray();
- Check(names.Contains("ui/index.html") && names.Any(n=>n.StartsWith("ui/assets/")&&n.EndsWith(".js")) && names.Any(n=>n.EndsWith(".css")),"HTML JS CSS incorporados no assembly publicado");
+ var names=metadata.ManifestResources.Select(h=>metadata.GetString(metadata.GetManifestResource(h).Name).Replace('\\','/')).ToArray();
+ Check(names.Contains("ui/index.html") && names.Contains("viewer/index.html") && names.Contains("viewer/viewer.js") && names.Any(n=>n.StartsWith("ui/assets/")&&n.EndsWith(".js")) && names.Any(n=>n.EndsWith(".css")),"HTML JS CSS incorporados no assembly publicado");
 }
 if(args.Length>0 && (args[0]=="live"||args[0]=="untrusted")) {
  var handler=new SocketsHttpHandler {AllowAutoRedirect=false,UseCookies=true,CookieContainer=new CookieContainer(),UseProxy=false,
@@ -53,6 +59,19 @@ if(args.Length>0 && (args[0]=="live"||args[0]=="untrusted")) {
   Check((await api.Send(origin,"/auth/me","GET",null,null)).Status==401,"API real: logout invalida cookie");
  }
 }
+Check(!ApiSession.AllowedDevice("POST","/auth/login"),"device bridge excludes user login");
+Check(!ApiSession.AllowedDevice("POST","/users"),"device bridge excludes admin");
+Check(ApiSession.AllowedDevice("POST","/connections"),"device connection route allowed");
+using(var deviceApi=new ApiSession(new DeviceStub(),()=> ("device-test","private-test"))) {
+ Check((await deviceApi.Send(origin,"/identity","GET",null,null)).Status==200,"device startup authenticates without user login");
+ Check((await deviceApi.Send(origin,"/connections","POST","{}",null)).Status==200,"device request does not depend on user CSRF cookie");
+ Check((await deviceApi.Send(origin,"/auth/login","POST","{}",null)).Status==403,"native login forbidden");
+}
+using(var unactivated=new ApiSession(new DeviceStub(),()=>null)) Check((await unactivated.Send(origin,"/identity","GET",null,null)).Status==401,"unactivated device does not contact API");
+foreach(var (mode,status) in new[]{("tls",495),("offline",503)}) {
+ using var deviceApi=new ApiSession(new Stub(mode),()=> ("device-test","private-test"));
+ Check((await deviceApi.Send(origin,"/identity","GET",null,null)).Status==status,"device "+mode+" fails closed");
+}
 Console.WriteLine($"{count} verificacoes passaram; nao representam execucao do WebView2 no Windows.");
 sealed class Stub(string mode="401"):HttpMessageHandler {
  protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token) {
@@ -61,5 +80,12 @@ sealed class Stub(string mode="401"):HttpMessageHandler {
   var result=new HttpResponseMessage(mode=="redirect"?HttpStatusCode.Redirect: mode=="html"?HttpStatusCode.OK:HttpStatusCode.Unauthorized);
   result.Content=new StringContent(mode=="html"?"<html>blocked</html>":"{}",System.Text.Encoding.UTF8,mode=="html"?"text/html":"application/json");
   return Task.FromResult(result);
+ }
+}
+
+sealed class DeviceStub:HttpMessageHandler {
+ protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token) {
+  if(request.Headers.Authorization?.Parameter!="private-test"||request.Headers.GetValues("X-Uai-Device").Single()!="device-test"||!request.RequestUri!.AbsolutePath.StartsWith("/api/desktop/"))throw new Exception("Incorrect device authentication");
+  return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("{}",System.Text.Encoding.UTF8,"application/json")});
  }
 }

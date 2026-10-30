@@ -1,3 +1,5 @@
+> Registro histórico anterior ao escopo0.3. O produto atual é exclusivamente acesso remoto, sem chamados. Para operação e limitações atuais, use [o guia0.3](10-acesso-remoto-03.md).
+
 # Segurança, limites e critérios de liberação
 
 ## Implementado na aplicação

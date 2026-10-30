@@ -154,3 +154,11 @@ function probe(s) {
 const timer=setInterval(()=>{for(const [id,s] of sessions){if(alive(s))probe(s);if(s.endedAt&&now()-s.endedAt>RETAIN_MS)sessions.delete(id);}},500);timer.unref();
 module.exports={register,status,attach,data,disconnected,agentEvent,TileObserver,
   capabilities:()=>({version:1,leaseSeconds:LEASE_MS/1000,oneConnection:true,relayTelemetry:true})};
+// Desktop bootstrap uses the same guest-cookie fields as MeshCentral sharing.
+// Only the owner of a live, not-yet-connected Uai share can obtain it.
+module.exports.viewerCookie = function(owner,id,domain,ip) {
+ const s=sessions.get(id);
+ if(!alive(s)||s.owner!==owner||s.relay!==null||require('node:net').isIP(ip)===0) return null;
+ return {userid:owner,domainid:domain,nid:s.node,ip,p:2,gn:s.guest,cf:72,r:8,
+   expire:s.expiresAt,pid:s.id,vo:s.viewOnly?1:0};
+};

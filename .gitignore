@@ -15,3 +15,15 @@ infra/mesh/data/
 agent/publish/
 
 **/__pycache__/
+
+# Per-user provisioning and native agent identities are never source artifacts.
+**/setup.bin
+**/identity.bin
+*.msh
+meshagent.db
+**/pending-enrollment.bin
+**/pending-enrollment.bin.new
+**/identity.bin.new
+**/setup.bin.new
+
+/frontend/public/remote-viewer/

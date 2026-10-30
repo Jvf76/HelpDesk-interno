@@ -41,12 +41,14 @@ class Security {
   }
 
   record Actor(UUID id, String name, String role, String tokenHash) {
+    boolean device() { return role.equals("DEVICE"); }
+
     boolean admin() {
       return role.equals("ADMIN");
     }
 
     boolean staff() {
-      return !role.equals("SOLICITANTE");
+      return Set.of("ADMIN","TECNICO","OPERADOR").contains(role);
     }
   }
 
@@ -74,6 +76,15 @@ class Security {
                 || path.equals("/error")) {
               chain.doFilter(r, s);
               return;
+            }
+            if(path.startsWith("/api/desktop/")) {
+              String bearer=Objects.toString(r.getHeader("Authorization"),"");
+              var devices=db.list("SELECT * FROM device WHERE agent_hash=? AND revoked=FALSE AND organization='UAI_TELECOM'",hash(bearer.startsWith("Bearer ")?bearer.substring(7):""));
+              if(devices.isEmpty()) { s.setStatus(401);s.setContentType("application/json");s.getWriter().write("{\"message\":\"Credencial revogada ou inválida. Solicite reativação administrativa.\"}"); return; }
+              var d=devices.getFirst();
+              if(!d.get("id").toString().equals(r.getHeader("X-Uai-Device"))) {s.sendError(403);return;}
+              r.setAttribute("actor",new Actor(Db.id(d,"id"),d.get("name").toString(),"DEVICE",d.get("agent_hash").toString()));
+              chain.doFilter(r,s);return;
             }
             String token = "";
             if (r.getCookies() != null)
@@ -106,7 +117,7 @@ class Security {
                 new Actor(
                     Db.id(u, "id"),
                     u.get("name").toString(),
-                    u.get("role").toString(),
+                    Objects.toString(u.get("panel_role"),u.get("role").toString()),
                     u.get("token_hash").toString()));
             r.setAttribute("csrf", u.get("csrf"));
             chain.doFilter(r, s);

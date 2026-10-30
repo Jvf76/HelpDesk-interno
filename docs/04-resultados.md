@@ -1,3 +1,5 @@
+> Registro histórico anterior ao escopo0.3. O produto atual é exclusivamente acesso remoto, sem chamados. Para operação e limitações atuais, use [o guia0.3](10-acesso-remoto-03.md).
+
 # Resultados — 27/10/2026
 
 **MVP não concluído. Nenhum atendimento entre dois Windows foi validado.** Esta revisão implementa a ligação do painel aos estados/encerramento do motor, com testes automatizados. Não transforma fixtures de protocolo em prova de captura/controle Windows.

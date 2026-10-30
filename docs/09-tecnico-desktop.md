@@ -1,3 +1,5 @@
+> Registro histórico anterior ao escopo0.3. O produto atual é exclusivamente acesso remoto, sem chamados. Para operação e limitações atuais, use [o guia0.3](10-acesso-remoto-03.md).
+
 # Uai Suporte Técnico 0.2.0 — prova Windows x64
 
 Esta publicação é um aplicativo WinForms/.NET 10 com WebView2, não um atalho

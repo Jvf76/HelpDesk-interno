@@ -12,7 +12,7 @@
     "node-forge": "1.4.1"
   },
   "scripts": {
-    "postinstall": "node patch-bootstrap.mjs && node patch-session.mjs",
+    "postinstall": "node patch-bootstrap.mjs && node patch-session.mjs && node patch-desktop.mjs && node patch-authenticode.mjs && node patch-enrollment.mjs",
     "test": "node --test tests/*.test.cjs"
   }
 }

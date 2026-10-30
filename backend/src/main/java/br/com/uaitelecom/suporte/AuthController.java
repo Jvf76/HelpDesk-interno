@@ -82,7 +82,7 @@ class AuthController {
             .build()
             .toString());
     db.audit(u.get("id").toString(), "LOGIN", "session");
-    return Map.of("id", u.get("id"), "name", u.get("name"), "role", u.get("role"), "csrf", csrf);
+    return Map.of("id", u.get("id"), "name", u.get("name"), "role", Objects.toString(u.get("panel_role"),u.get("role").toString()), "csrf", csrf);
   }
 
   @GetMapping("/me")
@@ -122,7 +122,7 @@ class AuthController {
             "Defina BOOTSTRAP_LOGIN e BOOTSTRAP_PASSWORD (14 a 72 bytes) para o primeiro"
                 + " administrador.");
       db.exec(
-          "INSERT INTO app_user VALUES (?,?,?,?,?,TRUE)",
+          "INSERT INTO app_user(id,name,login,password_hash,role,active) VALUES (?,?,?,?,?,TRUE)",
           UUID.randomUUID(),
           "Administrador",
           login.trim().toLowerCase(Locale.ROOT),

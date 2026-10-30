@@ -1,0 +1,16 @@
+import { useEffect,useRef,useState } from "react";
+import { api,type RemoteSession } from "./api";
+export function WebSession({code,csrf,onClose}:{code:string;csrf:string;onClose:()=>void}){
+ const [session,setSession]=useState<RemoteSession|null>(null),[bootstrap,setBootstrap]=useState<Record<string,unknown>|null>(null),[error,setError]=useState(""),[mode,setMode]=useState("VIEW"),[busy,setBusy]=useState(false);
+ const frame=useRef<HTMLIFrameElement>(null),id=useRef<string|null>(null);
+ async function stop(){setBootstrap(null);if(id.current)try{setSession(await api<RemoteSession>("/sessions/"+id.current+"/stop","POST",{}));}catch(e){setError((e as Error).message);}}
+ useEffect(()=>()=>{if(id.current)void fetch("/api/sessions/"+id.current+"/stop",{method:"POST",credentials:"same-origin",keepalive:true,headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:"{}"}).catch(()=>{});},[csrf]);
+ useEffect(()=>{if(!session||session.ended_at)return;const timer=setInterval(()=>void api<RemoteSession>("/sessions/"+session.id).then(s=>{setSession(s);if(s.ended_at||["STOPPING","UNVERIFIED"].includes(s.status))setBootstrap(null);}).catch(e=>{setBootstrap(null);setError(e.message);}),2000);return()=>clearInterval(timer);},[session?.id,session?.ended_at]);
+ useEffect(()=>{const message=(e:MessageEvent)=>{if(e.origin!==location.origin||e.source!==frame.current?.contentWindow||!e.data?.uaiViewer)return;if(["stop","disconnected"].includes(e.data.kind))void stop();};window.addEventListener("message",message);return()=>window.removeEventListener("message",message);},[]);
+ return <section className="mon-card"><h2>Atendimento remoto · {code}</h2><p>O computador acessado precisa estar ativado e aceitar localmente. Este navegador somente controla a sessão.</p>{error&&<p role="alert">{error}</p>}
+ {!session&&<><label>Modo solicitado<select value={mode} onChange={e=>setMode(e.target.value)}><option value="VIEW">Visualização</option><option value="CONTROL">Controle</option></select></label><button disabled={busy} onClick={()=>{setBusy(true);void api<RemoteSession>("/connections","POST",{code,mode}).then(s=>{id.current=s.id;setSession(s);}).catch(e=>setError(e.message)).finally(()=>setBusy(false));}}>Solicitar consentimento</button></>}
+ {session&&<p role="status">{session.ended_at?"Encerrada · "+session.result:session.status==="PENDING"?"Aguardando consentimento no computador acessado":session.status==="CONSENTED"?"Consentimento recebido":session.status}</p>}
+ {session?.status==="CONSENTED"&&!bootstrap&&<button disabled={busy} onClick={()=>{setBusy(true);void api<Record<string,unknown>>("/sessions/"+session.id+"/launch","POST",{}).then(setBootstrap).catch(e=>setError(e.message)).finally(()=>setBusy(false));}}>Abrir visualizador</button>}
+ {bootstrap&&<iframe title="Tela remota autorizada" ref={frame} src="/remote-viewer/index.html" sandbox="allow-scripts allow-same-origin" allow="fullscreen" onLoad={()=>frame.current?.contentWindow?.postMessage({uaiViewer:true,payload:{action:"start",...bootstrap}},location.origin)}/>}
+ <button onClick={()=>void stop()}>Encerrar acesso</button><button onClick={()=>{void stop();onClose();}}>Fechar atendimento</button></section>;
+}

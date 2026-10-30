@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><Compile Include="../UaiSuporte.Setup/Policy.cs" Link="Policy.cs" /><Compile Include="../UaiSuporte.Setup/LabPolicy.cs" Link="LabPolicy.cs" /><Compile Include="../UaiSuporte.Setup/SetupAudit.cs" Link="SetupAudit.cs" /><Compile Include="../UaiSuporte.Setup/InnoRequest.cs" Link="InnoRequest.cs" /></ItemGroup>
+</Project>

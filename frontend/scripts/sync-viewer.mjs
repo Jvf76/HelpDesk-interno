@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+const destination=new URL('../public/remote-viewer/',import.meta.url);
+fs.mkdirSync(destination,{recursive:true});
+fs.cpSync(new URL('../../desktop/UaiSuporte.App/Viewer/',import.meta.url),destination,{recursive:true});
+const index=new URL('index.html',destination);let html=fs.readFileSync(index,'utf8');
+html=html.replace('<head>','<head><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'self\'; style-src \'self\'; img-src data: blob:; connect-src wss://mesh.internal/meshrelay.ashx; object-src \'none\'; base-uri \'none\'; form-action \'none\'">').replace('<script src="viewer.js">','<script src="bridge.js"></script><script src="viewer.js">');fs.writeFileSync(index,html);
+fs.writeFileSync(new URL('bridge.js',destination),`'use strict';
+const listeners=[];
+window.chrome={webview:{addEventListener:(kind,fn)=>{if(kind==='message')listeners.push(fn);},postMessage:data=>parent.postMessage({uaiViewer:true,kind:data.kind},location.origin)}};
+window.addEventListener('message',event=>{if(event.source!==parent||event.origin!==location.origin||!event.data?.uaiViewer)return;const data=event.data.payload;if(data?.action!=='start'&&data?.action!=='stop')return;listeners.forEach(fn=>fn({data}));});
+`);

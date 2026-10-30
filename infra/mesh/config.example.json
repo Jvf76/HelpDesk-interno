@@ -11,13 +11,15 @@
   },
   "domains": {
     "": {
-      "title": "Uai Suporte — laboratório remoto",
+      "title": "Uai Suporte",
       "newAccounts": false,
       "userNameIsEmail": false,
       "userConsentFlags": 72,
-      "guestDeviceSharing": {"maxSessionTime": 1},
+      "guestDeviceSharing": {
+        "maxSessionTime": 1
+      },
       "consentMessages": {
-        "title": "Uai Telecom — autorizar suporte",
+        "title": "Uai Suporte",
         "desktop": "{0} solicita visualizar ou controlar esta tela. Permitir?",
         "consentTimeout": 30,
         "autoAcceptOnTimeout": false,
@@ -25,7 +27,16 @@
         "autoAcceptIfDesktopNoUser": false,
         "autoAcceptIfLocked": false,
         "autoAcceptIfDesktopLocked": false
-      }
+      },
+      "desktopPrivacyBarText": "Uai Suporte — acesso ativo: {0}",
+      "notificationMessages": {
+        "title": "Uai Suporte",
+        "desktop": "Acesso remoto solicitado por {0}."
+      },
+      "allowedOrigin": [
+        "mesh.internal",
+        "suporte.internal"
+      ]
     }
   }
 }

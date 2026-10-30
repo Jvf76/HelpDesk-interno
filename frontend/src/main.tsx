@@ -1,57 +1,77 @@
-import { isDesktop } from "./desktop";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  LayoutDashboard,
-  Monitor,
-  Ticket as TicketIcon,
-  Users,
-  LogOut,
-  Search,
-  Plus,
-  ArrowLeft,
-  ShieldCheck,
-  Radio,
-  RefreshCw,
-} from "lucide-react";
 import {
   api,
   setCsrf,
-  labels,
   date,
   type User,
   type Device,
-  type Ticket,
   type RemoteSession,
 } from "./api";
+import { isDesktop, desktopViewer, desktopRequest } from "./desktop";
 import "./style.css";
+import { MonitoringPanel } from "./MonitoringPanel";
+import { ActivationAdmin } from "./ActivationAdmin";
+import { DeviceApp } from "./DeviceApp";
+const states: Record<string, string> = {
+  PENDING: "Solicitada • aguardando consentimento",
+  CONSENTED: "Consentimento inicial recebido",
+  ISSUING: "Preparando conexão",
+  READY: "Aguardando autorização local do Uai Suporte",
+  CONNECTING: "Conectando",
+  AWAITING_CONSENT: "Aguardando consentimento local",
+  AWAITING_FRAME: "Aguardando imagem",
+  ACTIVE: "Ativa • imagem recebida pelo motor",
+  STOPPING: "Encerrando • confirmação pendente",
+  UNVERIFIED: "Sem confirmação do motor",
+  ENDED: "Encerrada",
+};
+function state(s: RemoteSession) {
+  if (s.ended_at) {
+    if (s.result === "REJECTED") return "Recusada";
+    if (s.result?.includes("EXPIRED")) return "Expirada";
+    return "Encerrada";
+  }
+  return states[s.status] || s.status;
+}
 function App() {
   const [user, setUser] = useState<User | null>(null),
     [initial, setInitial] = useState(true),
-    [page, setPage] = useState("dashboard"),
     [error, setError] = useState(""),
-    [loading, setLoading] = useState(false),
+    [busy, setBusy] = useState(false),
     [devices, setDevices] = useState<Device[]>([]),
-    [tickets, setTickets] = useState<Ticket[]>([]),
     [users, setUsers] = useState<User[]>([]),
     [query, setQuery] = useState(""),
-    [status, setStatus] = useState(""),
-    [priority, setPriority] = useState(""),
-    [location, setLocation] = useState(""),
-    [tech, setTech] = useState(""),
-    [detail, setDetail] = useState<Ticket | null>(null),
-    [modal, setModal] = useState(""),
+    [filter, setFilter] = useState(""),
+    [page, setPage] = useState("devices"),
     [selected, setSelected] = useState<Device | null>(null),
-    [code, setCode] = useState(""),
     [session, setSession] = useState<RemoteSession | null>(null),
-    [history, setHistory] = useState<{
-      tickets: Ticket[];
-      sessions: RemoteSession[];
-    } | null>(null),
-    [busy, setBusy] = useState(false);
+    [history, setHistory] = useState<RemoteSession[]>([]),
+    [modal, setModal] = useState(""),
+    [code, setCode] = useState("");
+  const [localDevice, setLocalDevice] = useState<{code?:string;state?:string;name?:string}>({});
+  const [targetCode, setTargetCode] = useState("");
   const authenticated = useRef(false);
-  const staff = user?.role !== "SOLICITANTE",
-    admin = user?.role === "ADMIN";
+  useEffect(() => {
+    if (!isDesktop) return;
+    const update = () => void desktopRequest("/desktop/device", "GET", null, "")
+      .then(async r => { if(r.ok) setLocalDevice(await r.json()); }).catch(() => {});
+    update(); const timer = setInterval(update, 3000); return () => clearInterval(timer);
+  }, []);
+  const admin = user?.role === "ADMIN";
+  function clear() {
+    authenticated.current = false;
+    setCsrf("");
+    setUser(null);
+    setDevices([]);
+    setUsers([]);
+    setSelected(null);
+    setSession(null);
+    setHistory([]);
+    setModal("");
+    setCode("");
+    void desktopViewer("close");
+  }
   useEffect(() => {
     api<User>("/auth/me", "GET", undefined, false)
       .then((u) => {
@@ -59,65 +79,58 @@ function App() {
         setUser(u);
         setCsrf(u.csrf);
       })
-      .catch((e) => { if (e.status !== 401) setError(e.message || "Servidor indisponível. Confira a conexão."); })
+      .catch((e) => {
+        if (e.status !== 401) setError(e.message);
+      })
       .finally(() => setInitial(false));
-    const handler = () => {
-      if (!authenticated.current) return;
-      authenticated.current = false;
-      setCsrf("");
-      setUser(null);
-      setSession(null);
-      setDevices([]);
-      setTickets([]);
-      setUsers([]);
-      setDetail(null);
-      setHistory(null);
-      setSelected(null);
-      setCode("");
-      setModal("");
-      setPage("dashboard");
-      setError("Sessão expirada. Entre novamente.");
+    const unauthorized = () => {
+      if (authenticated.current) {
+        clear();
+        setError("Sessão expirada. Entre novamente.");
+      }
     };
-    window.addEventListener("unauthorized", handler);
-    return () => window.removeEventListener("unauthorized", handler);
+    window.addEventListener("unauthorized", unauthorized);
+    return () => window.removeEventListener("unauthorized", unauthorized);
   }, []);
-  const refresh = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const [d, t, u] = await Promise.all([
-        api<Device[]>("/devices"),
-        api<Ticket[]>("/tickets"),
-        user.role === "SOLICITANTE"
-          ? Promise.resolve([])
-          : api<User[]>("/users"),
-      ]);
-      setDevices(d);
-      setTickets(t);
-      setUsers(u);
-      setError("");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+  async function refresh() {
+    const [d, u] = await Promise.all([
+      api<Device[]>("/devices"),
+      admin ? api<User[]>("/users") : Promise.resolve([]),
+    ]);
+    setDevices(d);
+    setUsers(u);
+  }
   useEffect(() => {
-    void refresh();
-    const t = setInterval(() => void refresh(), 15000);
+    if (!user || ["ADMIN","TECNICO","OPERADOR","LEITURA"].includes(user.role)) return;
+    void refresh().catch((e) => setError(e.message));
+    const t = setInterval(
+      () => void refresh().catch((e) => setError(e.message)),
+      10000,
+    );
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [user?.id]);
   useEffect(() => {
     if (!session || session.ended_at) return;
+    let stopped = false;
     const t = setInterval(() => {
-      api<RemoteSession>("/sessions/" + session.id)
-        .then(setSession)
+      void api<RemoteSession>("/sessions/" + session.id)
+        .then((s) => {
+          if (stopped) return;
+          setSession(s);
+          if (s.ended_at || ["STOPPING", "UNVERIFIED"].includes(s.status))
+            void desktopViewer("close");
+        })
         .catch((e) => {
+          if (stopped) return;
           setError(e.message);
-          setSession(current => current && !current.ended_at ? {...current, status: "UNVERIFIED"} : current);
+          setSession((s) => (s ? { ...s, status: "UNVERIFIED" } : null));
+          void desktopViewer("close");
         });
-    }, 2500);
-    return () => clearInterval(t);
+    }, 2000);
+    return () => {
+      stopped = true;
+      clearInterval(t);
+    };
   }, [session?.id, session?.ended_at]);
   async function action(work: () => Promise<void>) {
     setBusy(true);
@@ -130,65 +143,38 @@ function App() {
       setBusy(false);
     }
   }
-  const form = (e: React.FormEvent<HTMLFormElement>) => {
+  function fields(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     return Object.fromEntries(new FormData(e.currentTarget));
-  };
-  function nav(p: string) {
-    setPage(p);
-    setDetail(null);
-    setQuery("");
-    setHistory(null);
   }
-  async function openTicket(id: string) {
-    setDetail(await api<Ticket>("/tickets/" + id));
-    setPage("tickets");
-  }
-  async function requestRemote(d: Device, mode: string) {
+  async function request(d: Device, mode: string) {
     await action(async () => {
       setSession(
-        await api<RemoteSession>("/sessions", "POST", {
-          deviceId: d.id,
-          mode,
-          ticketId: detail?.device_id === d.id ? detail.id : null,
-        }),
+        await api<RemoteSession>("/connections", "POST", { code: d.id, mode }),
       );
       setSelected(d);
-      setModal("");
       setPage("remote");
+      setModal("");
     });
   }
-  const visibleDevices = devices.filter(
+  const visible = devices.filter(
     (d) =>
-      (d.name + " " + d.department + " " + d.location)
+      [d.id, d.name, d.department, d.location, d.owner_name]
+        .join(" ")
         .toLowerCase()
         .includes(query.toLowerCase()) &&
-      (!status || (status === "online" ? d.online : !d.online)) &&
-      (!location || d.location === location),
+      (!filter || (filter === "online" ? d.online : !d.online)),
   );
-  const visibleTickets = tickets.filter(
-    (t) =>
-      (t.title + " " + t.category)
-        .toLowerCase()
-        .includes(query.toLowerCase()) &&
-      (!status || t.status === status) &&
-      (!priority || t.priority === priority) &&
-      (!tech || t.technician_id === tech) &&
-      (!location ||
-        devices.find((d) => d.id === t.device_id)?.location === location),
-  );
-  const errorBox = error && (
+  const alert = error && (
     <div className="alert" role="alert">
       {error}
-      <button onClick={() => setError("")} aria-label="Fechar aviso">
-        ×
-      </button>
+      <button onClick={() => setError("")}>×</button>
     </div>
   );
   if (initial)
     return (
       <div className="login">
-        <p>Carregando Uai Suporte…</p>
+        <p>Carregando interface local…</p>
       </div>
     );
   if (!user)
@@ -199,23 +185,17 @@ function App() {
             uai<span>•</span>
           </div>
           <h1>
+            Acesso remoto.
+            <br />
             Suporte próximo.
-            <br />
-            Trabalho conectado.
           </h1>
-          <p>
-            Central de atendimento interno
-            <br />
-            Uai Telecom · TI / NOC
-          </p>
-          <small>
-            <ShieldCheck size={16} /> Acesso restrito à equipe e colaboradores
-          </small>
+          <p>Uai Telecom • acesso remoto assistido</p>
+          <small>Acesso assistido, autorizado e auditado</small>
         </div>
         <main>
           <form
             onSubmit={(e) => {
-              const f = form(e);
+              const f = fields(e);
               void action(async () => {
                 const u = await api<User>("/auth/login", "POST", f);
                 setCsrf(u.csrf);
@@ -224,10 +204,9 @@ function App() {
               });
             }}
           >
-            <span className="eyebrow">UAI SUPORTE</span>
-            <h2>Bem-vindo de volta</h2>
-            <p>Entre para acompanhar seus atendimentos.</p>
-            {errorBox}
+            <h2>Uai Suporte</h2>
+            <p>Entre com sua conta para solicitar conexões com consentimento.</p>
+            {alert}
             <label>
               Login
               <input
@@ -240,559 +219,245 @@ function App() {
             <label>
               Senha
               <input
-                type="password"
                 name="password"
+                type="password"
                 required
                 autoComplete="current-password"
                 maxLength={72}
               />
             </label>
             <button className="primary" disabled={busy}>
-              {busy ? "Entrando…" : "Entrar no painel"}
+              Entrar
             </button>
-            <small>{isDesktop ? "Aplicativo Técnico • interface incorporada • versão 0.2.0" : "Precisa de acesso? Procure o administrador de TI."}</small>
+            <small>
+              {isDesktop
+                ? "Interface incorporada • versão 0.5.3"
+                : "Console de administração • acesso remoto pelo aplicativo Windows"}
+            </small>
           </form>
         </main>
       </div>
     );
+  if(["ADMIN","TECNICO","OPERADOR","LEITURA"].includes(user.role)) return <MonitoringPanel user={user} onLogout={clear}/>;
   return (
     <div className="app">
       <aside>
         <div className="brand">
-          <span className="mark">
-            uai<span>•</span>
-          </span>
+          <span className="mark">uai•</span>
           <div>
-            Suporte<small>UAI TELECOM</small>
+            Suporte<small>Acesso remoto interno</small>
           </div>
         </div>
-        <small className="nav-caption">CENTRAL DE ATENDIMENTO</small>
         <nav>
-          {[
-            ["dashboard", "Visão geral", LayoutDashboard],
-            ["devices", "Computadores", Monitor],
-            ["tickets", "Chamados", TicketIcon],
-            ...(admin ? [["users", "Administração", Users]] : []),
-          ].map(([id, name, Icon]) => {
-            const I = Icon as typeof Monitor;
-            return (
-              <button
-                key={id as string}
-                className={page === id ? "active" : ""}
-                onClick={() => {
-                  setStatus("");
-                  nav(id as string);
-                }}
-              >
-                <I size={19} />
-                {name as string}
-              </button>
-            );
-          })}
+          <button onClick={() => setPage("devices")}>Seu código e conexão</button>
           {session && (
-            <button
-              className={page === "remote" ? "active" : ""}
-              onClick={() => setPage("remote")}
-            >
-              <Radio size={19} />
-              Atendimento remoto
+            <button onClick={() => setPage("remote")}>Sessão remota</button>
+          )}
+          {admin && (
+            <button onClick={() => setPage("users")}>
+              Usuários e permissões
             </button>
           )}
         </nav>
         <div className="sidebar-bottom">
-          <span className="pilot">PILOTO · REDE LOCAL / VPN</span>
           <p>
-            Atendimento com consentimento.
-            <br />
-            Você mantém o controle.
+            {user.name} • {admin ? "Administrador" : "Usuário"}
           </p>
-        </div>
-        <div className="profile">
-          <div className="avatar">{user.name.slice(0, 2).toUpperCase()}</div>
-          <div>
-            {user.name}
-            <small>{labels[user.role]}</small>
-          </div>
           <button
             title="Sair"
             onClick={() =>
               void action(async () => {
+                await desktopViewer("close");
                 await api("/auth/logout", "POST");
-                authenticated.current = false;
-                setCsrf("");
+                clear();
                 setError("");
-                window.location.reload();
-                setUser(null);
-                setSession(null);
-                setDevices([]);
-                setTickets([]);
               })
             }
           >
-            <LogOut size={18} />
+            Sair
           </button>
         </div>
       </aside>
       <div className="workspace">
         <header>
-          <span>
-            Workspace <b>/</b>{" "}
-            {
-              (
-                {
-                  dashboard: "Visão geral",
-                  devices: "Computadores",
-                  tickets: "Chamados",
-                  users: "Administração",
-                  remote: "Atendimento remoto",
-                } as Record<string, string>
-              )[page]
-            }
-          </span>
-          <div>
-            <span className="organization">TI / NOC</span>
-            <button
-              title="Atualizar"
-              onClick={() => void refresh()}
-              disabled={loading}
-            >
-              <RefreshCw size={17} className={loading ? "spin" : ""} />
-            </button>
-          </div>
+          <h1>
+            {page === "devices"
+              ? "Seu código e conexão"
+              : page === "remote"
+                ? "Atendimento remoto"
+                : "Administração"}
+          </h1>
+          <span>{devices.filter((d) => d.online).length} online</span>
         </header>
         <main>
-          {errorBox}
-          {page === "dashboard" && (
-            <>
-              <div className="page-heading">
-                <div>
-                  <span className="eyebrow">SEU DIA NO SUPORTE</span>
-                  <h1>Visão geral</h1>
-                  <p>Acompanhe os computadores e o que precisa de atenção.</p>
-                </div>
-                <button className="primary" onClick={() => setModal("ticket")}>
-                  <Plus size={17} /> Abrir chamado
-                </button>
-              </div>
-              <div className="stats">
-                <article>
-                  <span>Computadores online</span>
-                  <strong>
-                    {devices.filter((d) => d.online).length}
-                    <Monitor />
-                  </strong>
-                  <small>de {devices.length} dispositivos autorizados</small>
-                </article>
-                <article>
-                  <span>Chamados pendentes</span>
-                  <strong>
-                    {tickets.filter((t) => t.status !== "RESOLVIDO").length}
-                    <TicketIcon />
-                  </strong>
-                  <small>abertos, em atendimento e aguardando</small>
-                </article>
-                <article>
-                  <span>Em atendimento</span>
-                  <strong>
-                    {
-                      tickets.filter((t) => t.status === "EM_ATENDIMENTO")
-                        .length
-                    }
-                    <Radio />
-                  </strong>
-                  <small>trabalho em andamento</small>
-                </article>
-              </div>
-              <section>
-                <div className="section-title">
-                  <h2>Fila de atendimento</h2>
-                  <button onClick={() => nav("tickets")}>Ver todos →</button>
-                </div>
-                <TicketTable
-                  items={tickets
-                    .filter((t) => t.status !== "RESOLVIDO")
-                    .slice(0, 6)}
-                  open={(id) => void action(() => openTicket(id))}
-                />
-              </section>
-              <div className="info-card">
-                <ShieldCheck />
-                <div>
-                  <h3>Suporte remoto assistido</h3>
-                  <p>
-                    O colaborador autoriza a sessão no computador. A prova usa
-                    janelas de até 60 segundos, com encerramento local pelo
-                    MeshAgent. A integração Windows ainda requer homologação.
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
+          {alert}
+          {admin && page === "devices" && <ActivationAdmin devices={devices} />}
+          {page === "devices" && <section className="card connection-card" aria-label="Conexão assistida">
+            <div className="connection-block">
+            <h2>Seu código</h2>
+            <input aria-label="Seu código" readOnly value={localDevice.code || "Cadastro deste computador pendente"} />
+            <p>{localDevice.name} • {localDevice.state || (isDesktop ? "Verificando cadastro local…" : "Abra o aplicativo Windows para compartilhar este computador.")}</p>
+            <p>O código identifica o computador. Ninguém recebe acesso sem sua autorização local.</p>
+            {isDesktop && <button onClick={() => void desktopRequest("/desktop/receiving", "POST", null, "")}>Consentimento e encerrar acesso a este computador</button>}
+            </div>
+            <div className="connection-block">
+            <h2>Conectar a outro computador</h2>
+            <form onSubmit={e => { e.preventDefault(); void action(async () => {
+              if(targetCode.trim().toLowerCase() === localDevice.code?.toLowerCase()) throw Error("Informe o código de outro computador.");
+              setSession(await api<RemoteSession>("/connections", "POST", {code:targetCode.trim(),mode:"CONTROL"}));
+              setSelected(null); setPage("remote");
+            }); }}>
+              <label>Código do computador<input aria-label="Código do computador" required maxLength={36} value={targetCode} onChange={e => setTargetCode(e.target.value)} placeholder="Cole a identificação compartilhada pela outra pessoa" /></label>
+              <button className="primary" disabled={busy || !isDesktop}>Solicitar conexão</button>
+            </form>
+            <p>A outra pessoa verá seu nome autenticado e poderá recusar, permitir apenas visualização ou permitir controle.</p>
+            <button onClick={() => void action(async () => {setHistory(await api<RemoteSession[]>("/connections"));setModal("history");})}>Meu histórico de conexões</button>
+            </div>
+          </section>}
           {page === "devices" && (
             <>
-              <div className="page-heading">
-                <div>
-                  <span className="eyebrow">PARQUE DE COMPUTADORES</span>
-                  <h1>
-                    Computadores <em>{devices.length}</em>
-                  </h1>
-                  <p>Último contato do agente define a disponibilidade.</p>
-                </div>
+              <div className="toolbar">
+                <input
+                  aria-label="Pesquisar computador"
+                  placeholder="Nome, identificação, setor ou responsável"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <select
+                  aria-label="Conexão"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  <option value="online">Online</option>
+                  <option value="offline">Offline</option>
+                </select>
+                <button onClick={() => void action(refresh)}>Atualizar</button>
                 {admin && (
                   <button
                     className="primary"
                     onClick={() => {
-                      setSelected(null);
                       setCode("");
+                      setSelected(null);
                       setModal("device");
                     }}
                   >
-                    <Plus size={17} /> Cadastrar computador
+                    Cadastrar computador
                   </button>
                 )}
               </div>
-              <div className="filters">
-                <label className="search">
-                  <Search size={17} />
-                  <input
-                    placeholder="Buscar nome, setor ou localidade"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </label>
-                <select
-                  aria-label="Disponibilidade"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                >
-                  <option value="">Todos os estados</option>
-                  <option value="online">Online</option>
-                  <option value="offline">Offline</option>
-                </select>
-                <LocationFilter
-                  devices={devices}
-                  value={location}
-                  set={setLocation}
-                />
-              </div>
-              <section className="table-wrap">
+              <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Computador</th>
-                      <th>Setor / localidade</th>
-                      <th>Estado</th>
-                      <th>Último contato</th>
-                      <th>Ações</th>
+                      <th>Computador / identificação</th>
+                      <th>Setor / local</th>
+                      <th>Responsável</th>
+                      <th>Conexão</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleDevices.map((d) => (
+                    {visible.map((d) => (
                       <tr key={d.id}>
                         <td>
-                          <div className="cell-title">
-                            <Monitor size={19} />
-                            <div>
-                              <b>{d.name}</b>
-                              <small>
-                                {d.os || "Aguardando vínculo do agente"}
-                              </small>
-                            </div>
-                          </div>
+                          <b>{d.name}</b>
+                          <small>{d.id}</small>
                         </td>
                         <td>
                           {d.department}
                           <small>{d.location}</small>
                         </td>
+                        <td>{d.owner_name || "—"}</td>
                         <td>
-                          <Badge
-                            text={
-                              d.revoked
-                                ? "Revogado"
-                                : d.online
-                                  ? "Online"
-                                  : "Offline"
-                            }
-                            tone={d.online ? "good" : "muted"}
-                          />
+                          {d.revoked
+                            ? "Revogado"
+                            : d.online
+                              ? "Online"
+                              : "Offline"}
                         </td>
-                        <td>{date(d.last_seen)}</td>
                         <td>
                           <button
                             onClick={() => {
                               setSelected(d);
-                              setModal("device-actions");
+                              setHistory([]);
+                              setCode("");
+                              setModal("access");
                             }}
                           >
-                            Detalhes →
+                            Selecionar
                           </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {!visibleDevices.length && (
-                  <Empty
-                    text={
-                      loading
-                        ? "Carregando computadores…"
-                        : "Nenhum computador encontrado."
-                    }
-                  />
+                {!visible.length && (
+                  <p className="empty">Nenhum computador encontrado.</p>
                 )}
-              </section>
+              </div>
             </>
           )}
-          {page === "tickets" && !detail && (
+          {page === "remote" && session && (
             <>
-              <div className="page-heading">
-                <div>
-                  <span className="eyebrow">ATENDIMENTOS</span>
-                  <h1>
-                    Chamados <em>{tickets.length}</em>
-                  </h1>
-                  <p>
-                    {staff
-                      ? "Organize prioridades e acompanhe as solicitações."
-                      : "Acompanhe suas solicitações e converse com o suporte."}
-                  </p>
-                </div>
-                <button className="primary" onClick={() => setModal("ticket")}>
-                  <Plus size={17} /> Abrir chamado
-                </button>
-              </div>
-              <div className="filters">
-                <label className="search">
-                  <Search size={17} />
-                  <input
-                    placeholder="Buscar chamado"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </label>
-                <select
-                  aria-label="Estado"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                >
-                  <option value="">Todos os estados</option>
-                  {["ABERTO", "EM_ATENDIMENTO", "AGUARDANDO", "RESOLVIDO"].map(
-                    (s) => (
-                      <option key={s}>{s}</option>
-                    ),
-                  )}
-                </select>
-                <select
-                  aria-label="Prioridade"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                >
-                  <option value="">Todas as prioridades</option>
-                  {["BAIXA", "NORMAL", "ALTA", "URGENTE"].map((s) => (
-                    <option key={s} value={s}>
-                      {labels[s]}
-                    </option>
-                  ))}
-                </select>
-                {staff && (
-                  <select
-                    aria-label="Técnico"
-                    value={tech}
-                    onChange={(e) => setTech(e.target.value)}
-                  >
-                    <option value="">Todos os técnicos</option>
-                    {users
-                      .filter((u) => u.role !== "SOLICITANTE")
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                  </select>
-                )}
-                <LocationFilter
-                  devices={devices}
-                  value={location}
-                  set={setLocation}
-                />
-              </div>
-              <section>
-                <TicketTable
-                  items={visibleTickets}
-                  open={(id) => void action(() => openTicket(id))}
-                />
-              </section>
-              <small>Consulta limitada aos 500 chamados mais recentes.</small>
-            </>
-          )}
-          {page === "tickets" && detail && (
-            <>
-              <button onClick={() => setDetail(null)}>
-                <ArrowLeft size={16} /> Voltar aos chamados
-              </button>
-              <div className="page-heading">
-                <div>
-                  <span className="eyebrow">
-                    CHAMADO #{detail.id.slice(0, 8)}
-                  </span>
-                  <h1>{detail.title}</h1>
-                  <p>
-                    {detail.category} · Aberto em {date(detail.created_at)}
-                  </p>
-                </div>
-                <Badge text={labels[detail.status]} />
-              </div>
-              <div className="detail-grid">
-                <section className="padded">
-                  <h2>Solicitação</h2>
-                  <p className="prewrap">{detail.description}</p>
-                  <h2>Histórico e comentários</h2>
-                  {detail.events?.map((e) => (
-                    <div className="event" key={e.id}>
-                      <b>{e.author}</b>
-                      <small>{date(e.created_at)}</small>
-                      <p className="prewrap">{e.body}</p>
-                    </div>
-                  ))}
-                  <form
-                    onSubmit={(e) => {
-                      const f = form(e);
-                      const el = e.currentTarget;
+              <section className="info-card">
+                <h2>{selected?.name || session.device_id}</h2>
+                <p>Identificação: {session.device_id}</p>
+                <h3>{state(session)}</h3>
+                <p>
+                  {session.mode === "VIEW"
+                    ? "Somente visualização"
+                    : "Visualização e controle"}{" "}
+                  • Limite: {date(session.expires_at)}
+                </p>
+                <p>
+                  Início: {date(session.started_at)} • Término:{" "}
+                  {date(session.ended_at)}
+                </p>
+                {session.result && <p>Motivo: {session.result}</p>}
+                {session.status === "CONSENTED" && !session.ended_at && (
+                  <button
+                    className="primary"
+                    disabled={busy || !isDesktop}
+                    onClick={() =>
                       void action(async () => {
                         await api(
-                          "/tickets/" + detail.id + "/comments",
+                          "/sessions/" + session.id + "/launch",
                           "POST",
-                          f,
                         );
-                        await openTicket(detail.id);
-                        el.reset();
-                      });
-                    }}
+                        setSession(await api("/sessions/" + session.id));
+                      })
+                    }
                   >
-                    <label>
-                      Adicionar comentário
-                      <textarea name="body" required maxLength={8000} />
-                    </label>
-                    <button className="primary" disabled={busy}>
-                      Enviar comentário
-                    </button>
-                  </form>
-                </section>
-                <section className="padded">
-                  <h2>Organização</h2>
-                  {staff ? (
-                    <form
-                      key={detail.id + detail.status}
-                      onSubmit={(e) => {
-                        const f = form(e);
-                        void action(async () => {
-                          await api("/tickets/" + detail.id, "PUT", {
-                            ...f,
-                            technicianId: f.technicianId || null,
-                          });
-                          await openTicket(detail.id);
-                          await refresh();
-                        });
-                      }}
-                    >
-                      <label>
-                        Estado
-                        <select name="status" defaultValue={detail.status}>
-                          {[
-                            "ABERTO",
-                            "EM_ATENDIMENTO",
-                            "AGUARDANDO",
-                            "RESOLVIDO",
-                          ].map((s) => (
-                            <option key={s} value={s}>
-                              {labels[s]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Prioridade
-                        <select name="priority" defaultValue={detail.priority}>
-                          {["BAIXA", "NORMAL", "ALTA", "URGENTE"].map((s) => (
-                            <option key={s} value={s}>
-                              {labels[s]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Técnico
-                        <select
-                          name="technicianId"
-                          defaultValue={detail.technician_id ?? ""}
-                        >
-                          <option value="">Sem responsável</option>
-                          {users
-                            .filter((u) => u.role !== "SOLICITANTE" && u.active)
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <button disabled={busy} className="primary">
-                        Salvar alterações
-                      </button>
-                    </form>
-                  ) : (
-                    <p>Prioridade: {labels[detail.priority]}</p>
-                  )}
-                  <h2>Computador vinculado</h2>
-                  <p>
-                    {devices.find((d) => d.id === detail.device_id)?.name ??
-                      "Nenhum computador disponível"}
-                  </p>
-                  {staff &&
-                    devices.find((d) => d.id === detail.device_id)?.online && (
-                      <button
-                        onClick={() => {
-                          setSelected(
-                            devices.find((d) => d.id === detail.device_id)!,
-                          );
-                          setModal("device-actions");
-                        }}
-                      >
-                        Solicitar acesso remoto
-                      </button>
-                    )}
-                  <h2>Sessões relacionadas</h2>
-                  {detail.sessions?.map((s) => (
-                    <p key={s.id}>
-                      {labels[s.mode]} · {labels[s.status]}
-                      <small>
-                        {date(s.requested_at)} · {s.result}
-                      </small>
-                    </p>
-                  ))}
-                  {!detail.sessions?.length && (
-                    <small>Nenhuma sessão relacionada.</small>
-                  )}
-                </section>
-              </div>
+                    Abrir visualizador interno
+                  </button>
+                )}
+                <button
+                  className="danger"
+                  disabled={busy || !!session.ended_at}
+                  onClick={() =>
+                    void action(async () => {
+                      await desktopViewer("close");
+                      setSession(
+                        await api("/sessions/" + session.id + "/stop", "POST"),
+                      );
+                    })
+                  }
+                >
+                  Encerrar sessão
+                </button>
+              </section>
+              <p>
+                O visualizador aparece na aba nativa Atendimento remoto. O
+                estado Ativa exige dados reais do motor, não apenas conexão. Ao
+                perder confirmação, a imagem é fechada.
+              </p>
             </>
           )}
           {page === "users" && admin && (
             <>
-              <div className="page-heading">
-                <div>
-                  <span className="eyebrow">CONTROLE DE ACESSO</span>
-                  <h1>Usuários e permissões</h1>
-                  <p>
-                    Permissões de computadores são gerenciadas em cada
-                    dispositivo.
-                  </p>
-                </div>
-                <button className="primary" onClick={() => setModal("user")}>
-                  <Plus size={17} /> Novo usuário
-                </button>
-              </div>
-              <section className="table-wrap">
+              <button onClick={() => setModal("user")}>Novo usuário</button>
+              <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -800,249 +465,227 @@ function App() {
                       <th>Login</th>
                       <th>Perfil</th>
                       <th>Estado</th>
-                      <th>Ações</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
                     {users.map((u) => (
                       <tr key={u.id}>
-                        <td>
-                          <b>{u.name}</b>
-                        </td>
+                        <td>{u.name}</td>
                         <td>{u.login}</td>
+                        <td>{u.role}</td>
+                        <td>{u.active ? "Ativo" : "Inativo"}</td>
                         <td>
-                          <select
-                            aria-label={"Perfil de " + u.name}
-                            value={u.role}
-                            disabled={u.id === user.id || busy}
-                            onChange={(e) =>
-                              void action(async () => {
-                                await api("/users/" + u.id, "PUT", {
-                                  role: e.target.value,
-                                  active: u.active,
-                                });
-                                await refresh();
-                              })
-                            }
-                          >
-                            {["ADMIN", "TECNICO", "SOLICITANTE"].map((s) => (
-                              <option key={s} value={s}>
-                                {labels[s]}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>{u.active ? "Ativo" : "Desativado"}</td>
-                        <td>
-                          <button
-                            disabled={u.id === user.id || busy}
-                            onClick={() =>
-                              void action(async () => {
-                                await api("/users/" + u.id, "PUT", {
-                                  role: u.role,
-                                  active: !u.active,
-                                });
-                                await refresh();
-                              })
-                            }
-                          >
-                            {u.active ? "Desativar" : "Ativar"}
-                          </button>
+                          {u.id !== user.id && (
+                            <button
+                              onClick={() =>
+                                void action(async () => {
+                                  await api("/users/" + u.id, "PUT", {
+                                    role: u.role,
+                                    active: !u.active,
+                                  });
+                                  await refresh();
+                                })
+                              }
+                            >
+                              {u.active ? "Desativar" : "Ativar"}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </section>
-            </>
-          )}
-          {page === "remote" && session && (
-            <>
-              <div className="page-heading">
-                <div>
-                  <span className="eyebrow">
-                    ATENDIMENTO REMOTO · PROVA TÉCNICA
-                  </span>
-                  <h1>{selected?.name ?? "Computador remoto"}</h1>
-                  <p>
-                    {labels[session.mode]} · expiração:{" "}
-                    {date(session.expires_at)}
-                  </p>
-                </div>
-                <button
-                  className="danger"
-                  disabled={busy || !!session.ended_at}
-                  onClick={() =>
-                    void action(async () =>
-                      setSession(
-                        await api<RemoteSession>(
-                          "/sessions/" + session.id + "/stop",
-                          "POST",
-                        ),
-                      ),
-                    )
-                  }
-                >
-                  Encerrar solicitação
-                </button>
-              </div>
-              <section className="remote-stage">
-                <Monitor size={56} />
-                <h2>{session.result === "EXPIRED_UNCONFIRMED" ? "Expirado • encerramento não confirmado" : (labels[session.status] ?? session.status)}</h2>
-                <p>
-                  O consentimento inicial ocorre no Uai Suporte Agent. O
-                  MeshAgent solicitará uma segunda confirmação antes de
-                  transmitir a tela.
-                </p>
-                {session.status === "CONSENTED" && !isDesktop && (
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => {
-                      const tab = window.open("about:blank", "_blank");
-                      if (tab) tab.opener = null;
-                      void action(async () => {
-                        try {
-                          const link = await api<{ url: string }>(
-                            "/sessions/" + session.id + "/launch",
-                            "POST",
-                          );
-                          if (tab) tab.location.replace(link.url);
-                          else
-                            throw new Error(
-                              "Permita pop-ups e solicite uma nova sessão.",
-                            );
-                          setSession(await api("/sessions/" + session.id));
-                        } catch (e) {
-                          tab?.close();
-                          throw e;
-                        }
-                      });
-                    }}
-                  >
-                    Abrir tela remota
-                  </button>
-                )}
-                {session.status === "READY" && (
-                  <p>
-                    Aguarde a confirmação local na janela do MeshAgent.
-                    O link emitido ainda não significa transmissão.
-                  </p>
-                )}
-                {session.started_at && <p>Primeiro bloco de imagem no motor: {date(session.started_at)}</p>}
-                {session.engine_seen_at && <p>Última confirmação do motor: {date(session.engine_seen_at)}</p>}
-                {session.status === "ACTIVE" && <p>A imagem aparece na janela remota. A recepção pelo motor não comprova a renderização no navegador.</p>}
-                {session.result && <small>Resultado: {session.result}</small>}
-              </section>
-              <div className="info-card">
-                <ShieldCheck />
-                <p>
-                  A barra de privacidade do MeshAgent permite encerrar
-                  localmente. Se houver falha de rede, o encerramento pelo
-                  painel pode ficar pendente até a expiração no motor.
-                </p>
               </div>
             </>
           )}
         </main>
-        <footer>
-          Uai Telecom{" "}
-          <span>Uai Suporte · piloto 0.1 · dados reais, sem demonstração</span>
-        </footer>
       </div>
       {modal && (
         <div className="overlay">
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Formulário"
-          >
-            <button
-              className="close"
-              onClick={() => {
-                setModal("");
-                setCode("");
-                setHistory(null);
-              }}
-              aria-label="Fechar"
-            >
+          <section className="modal">
+            <button className="close" onClick={() => setModal("")}>
               ×
             </button>
-            {errorBox}
-            {modal === "ticket" && (
+            {modal === "access" && selected && (
               <>
-                <h2>Abrir chamado</h2>
-                <p>Conte o que aconteceu para agilizar seu atendimento.</p>
+                <h2>{selected.name}</h2>
+                <p>{selected.id}</p>
+                <p>
+                  {selected.online ? "Online" : "Offline"} • {selected.os}
+                </p>
+                <div className="actions">
+                  <button
+                    disabled={busy || !selected.online || !isDesktop}
+                    onClick={() => void request(selected, "VIEW")}
+                  >
+                    Solicitar visualização
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={busy || !selected.online || !isDesktop}
+                    onClick={() => void request(selected, "CONTROL")}
+                  >
+                    Solicitar controle
+                  </button>
+                  <button
+                    onClick={() =>
+                      void action(async () =>
+                        setHistory(
+                          (
+                            await api<{ sessions: RemoteSession[] }>(
+                              "/devices/" + selected.id + "/history",
+                            )
+                          ).sessions,
+                        ),
+                      )
+                    }
+                  >
+                    Histórico de acessos
+                  </button>
+                </div>
+                {!isDesktop && (
+                  <p>Inicie sessões pelo aplicativo Uai Suporte Windows.</p>
+                )}
+                {admin && (
+                  <>
+                    <hr />
+                    <button onClick={() => setModal("device")}>
+                      Editar cadastro
+                    </button>
+                    <button
+                      onClick={() =>
+                        void action(async () => {
+                          const r = await api<{ code: string }>(
+                            "/devices/" + selected.id + "/enrollment",
+                            "POST",
+                          );
+                          setCode(r.code);
+                        })
+                      }
+                    >
+                      Código temporário de cadastro
+                    </button>
+                    <button onClick={() => {
+                      if (!window.confirm("Recuperar o mesmo código público? A credencial anterior será revogada e as sessões encerradas.")) return;
+                      void action(async () => {
+                        const r = await api<{code:string}>("/devices/" + selected.id + "/recovery", "POST");
+                        setCode(r.code); await refresh();
+                      });
+                    }}>Recuperar cadastro para reinstalação</button>
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        void action(async () => {
+                          await api(
+                            "/devices/" + selected.id + "/revoke",
+                            "POST",
+                          );
+                          setModal("");
+                          await refresh();
+                        })
+                      }
+                    >
+                      Revogar dispositivo
+                    </button>
+                    {code && (
+                      <p>
+                        <code>{code}</code> • Uso único, válido por 10 minutos;
+                        somente TI.
+                      </p>
+                    )}
+
+                  </>
+                )}
+                {history.map((s) => (
+                  <p key={s.id}>
+                    {s.requester_name || s.technician_name} • {s.mode} • {state(s)}
+                    <small>
+                      Solicitado: {date(s.requested_at)} • Início: {date(s.started_at)} → Fim: {date(s.ended_at)} • {s.result}
+                    </small>
+                  </p>
+                ))}
+              </>
+            )}
+            {modal === "device" && admin && (
+              <>
+                <h2>
+                  {selected ? "Editar computador" : "Cadastrar computador"}
+                </h2>
                 <form
                   onSubmit={(e) => {
-                    const f = form(e);
+                    const f = fields(e);
                     void action(async () => {
-                      const t = await api<{ id: string }>("/tickets", "POST", {
+                      const body = {
                         ...f,
-                        deviceId: f.deviceId || null,
-                      });
-                      setModal("");
+                        ownerId: f.ownerId || null,
+                        meshNode: null,
+                      };
+                      if (selected) {
+                        await api("/devices/" + selected.id, "PUT", body);
+                        setModal("");
+                      } else {
+                        const r = await api<{ code: string }>(
+                          "/devices",
+                          "POST",
+                          body,
+                        );
+                        setCode(r.code);
+                      }
                       await refresh();
-                      await openTicket(t.id);
                     });
                   }}
                 >
-                  <label>
-                    Título
-                    <input name="title" required maxLength={200} />
-                  </label>
-                  <label>
-                    Descrição
-                    <textarea name="description" required maxLength={8000} />
-                  </label>
-                  <div className="fields">
-                    <label>
-                      Categoria
-                      <select name="category">
-                        <option>Conectividade</option>
-                        <option>Sistema</option>
-                        <option>Equipamento</option>
-                        <option>Acesso</option>
-                        <option>Outros</option>
-                      </select>
+                  {[
+                    ["name", "Nome"],
+                    ["department", "Setor"],
+                    ["location", "Localidade"],
+                  ].map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <input
+                        name={key}
+                        required
+                        maxLength={120}
+                        defaultValue={
+                          selected?.[key as "name" | "department" | "location"]
+                        }
+                      />
                     </label>
-                    <label>
-                      Prioridade
-                      <select name="priority" defaultValue="NORMAL">
-                        {["BAIXA", "NORMAL", "ALTA", "URGENTE"].map((s) => (
-                          <option key={s} value={s}>
-                            {labels[s]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
+                  ))}
                   <label>
-                    Computador (opcional)
-                    <select name="deviceId">
-                      <option value="">Sem vínculo</option>
-                      {devices
-                        .filter((d) => !d.revoked)
-                        .map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name}
-                          </option>
-                        ))}
+                    Responsável
+                    <select
+                      name="ownerId"
+                      defaultValue={selected?.owner_id || ""}
+                    >
+                      <option value="">Não informado</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
-                  <button className="primary" disabled={busy}>
-                    Criar chamado
+                  <p>O instalador confirma automaticamente a identidade do MeshAgent.</p>
+                  <button disabled={busy || (!selected && !!code)}>
+                    Salvar
                   </button>
                 </form>
+                {code && (
+                  <p>
+                    Código de uso único para a TI: <code>{code}</code> (10
+                    minutos)
+                  </p>
+                )}
               </>
             )}
-            {modal === "user" && (
+            {modal === "user" && admin && (
               <>
                 <h2>Novo usuário</h2>
                 <form
                   onSubmit={(e) => {
-                    const f = form(e);
+                    const f = fields(e);
                     void action(async () => {
                       await api("/users", "POST", f);
                       setModal("");
@@ -1056,305 +699,24 @@ function App() {
                   </label>
                   <label>
                     Login
-                    <input
-                      name="login"
-                      required
-                      pattern="[a-zA-Z0-9._@-]{3,120}"
-                      autoComplete="off"
-                    />
+                    <input name="login" required maxLength={120} />
                   </label>
                   <label>
-                    Senha inicial (14 a 72 bytes)
+                    Senha inicial
                     <input
                       name="password"
                       type="password"
                       required
                       minLength={14}
                       maxLength={72}
-                      autoComplete="new-password"
                     />
                   </label>
-                  <label>
-                    Perfil
-                    <select name="role">
-                      <option value="SOLICITANTE">Solicitante</option>
-                      <option value="TECNICO">Técnico</option>
-                      <option value="ADMIN">Administrador</option>
-                    </select>
-                  </label>
-                  <button className="primary" disabled={busy}>
-                    Cadastrar usuário
-                  </button>
+                  <select name="role">
+                    <option value="SOLICITANTE">Usuário</option>
+                    <option value="ADMIN">Administrador</option>
+                  </select>
+                  <button disabled={busy}>Criar</button>
                 </form>
-              </>
-            )}
-            {modal === "device" && (
-              <>
-                <h2>
-                  {selected ? "Editar computador" : "Cadastrar computador"}
-                </h2>
-                {code ? (
-                  <div className="info-card">
-                    <div>
-                      <h3>Código de vínculo · válido por 10 minutos</h3>
-                      <code className="enroll-code">{code}</code>
-                      <p>
-                        Informe este código no agente Windows. Ele só pode ser
-                        usado uma vez e não será exibido novamente.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <form
-                    onSubmit={(e) => {
-                      const f = form(e);
-                      void action(async () => {
-                        const body = {
-                          ...f,
-                          ownerId: f.ownerId || null,
-                          meshNode: f.meshNode || null,
-                        };
-                        if (selected) {
-                          await api("/devices/" + selected.id, "PUT", body);
-                          setModal("");
-                        } else {
-                          const d = await api<{ code: string }>(
-                            "/devices",
-                            "POST",
-                            body,
-                          );
-                          setCode(d.code);
-                        }
-                        await refresh();
-                      });
-                    }}
-                  >
-                    <label>
-                      Nome
-                      <input
-                        name="name"
-                        defaultValue={selected?.name}
-                        required
-                        maxLength={120}
-                      />
-                    </label>
-                    <div className="fields">
-                      <label>
-                        Setor
-                        <input
-                          name="department"
-                          defaultValue={selected?.department}
-                          required
-                          maxLength={120}
-                        />
-                      </label>
-                      <label>
-                        Localidade
-                        <input
-                          name="location"
-                          defaultValue={selected?.location}
-                          required
-                          maxLength={120}
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      Responsável
-                      <select
-                        name="ownerId"
-                        defaultValue={selected?.owner_id ?? ""}
-                      >
-                        <option value="">Sem responsável</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Node ID do MeshCentral (opcional)
-                      <input
-                        name="meshNode"
-                        defaultValue={selected?.mesh_node ?? ""}
-                        placeholder="node//..."
-                      />
-                    </label>
-                    <button className="primary" disabled={busy}>
-                      {selected ? "Salvar" : "Cadastrar e gerar vínculo"}
-                    </button>
-                  </form>
-                )}
-              </>
-            )}
-            {modal === "device-actions" && selected && (
-              <>
-                <span className="eyebrow">COMPUTADOR</span>
-                <h2>{selected.name}</h2>
-                <p>
-                  {selected.department} · {selected.location}
-                </p>
-                <Badge
-                  text={
-                    selected.revoked
-                      ? "Revogado"
-                      : selected.online
-                        ? "Online"
-                        : "Offline"
-                  }
-                  tone={selected.online ? "good" : "muted"}
-                />
-                {isDesktop && <p>Prova desktop: solicitações remotas desativadas até validar login e logout.</p>}
-                {staff && (
-                  <div className="actions">
-                    <button
-                      disabled={isDesktop || !selected.online || busy}
-                      onClick={() => void requestRemote(selected, "VIEW")}
-                    >
-                      Solicitar visualização
-                    </button>
-                    <button
-                      className="primary"
-                      disabled={isDesktop || !selected.online || busy}
-                      onClick={() => void requestRemote(selected, "CONTROL")}
-                    >
-                      Solicitar controle
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void action(async () =>
-                          setHistory(
-                            await api("/devices/" + selected.id + "/history"),
-                          ),
-                        )
-                      }
-                    >
-                      Histórico de atendimentos
-                    </button>
-                  </div>
-                )}
-                {admin && (
-                  <>
-                    <hr />
-                    <h3>Administração</h3>
-                    <div className="actions">
-                      <button onClick={() => setModal("device")}>
-                        Editar cadastro
-                      </button>
-                      <button
-                        disabled={selected.revoked || busy}
-                        onClick={() =>
-                          void action(async () => {
-                            const d = await api<{ code: string }>(
-                              "/devices/" + selected.id + "/enrollment",
-                              "POST",
-                            );
-                            setCode(d.code);
-                          })
-                        }
-                      >
-                        Renovar código de vínculo
-                      </button>
-                      <button
-                        className="danger"
-                        disabled={selected.revoked || busy}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Revogar este agente e encerrar suas sessões?",
-                            )
-                          )
-                            void action(async () => {
-                              await api(
-                                "/devices/" + selected.id + "/revoke",
-                                "POST",
-                              );
-                              setModal("");
-                              await refresh();
-                            });
-                        }}
-                      >
-                        Revogar dispositivo
-                      </button>
-                    </div>
-                    {code && <code className="enroll-code">{code}</code>}
-                    <h3>Permissão por técnico</h3>
-                    <form
-                      onSubmit={(e) => {
-                        const f = form(e);
-                        void action(async () => {
-                          if (f.permission === "NONE")
-                            await api(
-                              "/devices/" +
-                                selected.id +
-                                "/permissions/" +
-                                f.userId,
-                              "DELETE",
-                            );
-                          else
-                            await api(
-                              "/devices/" + selected.id + "/permissions",
-                              "PUT",
-                              {
-                                userId: f.userId,
-                                control: f.permission === "CONTROL",
-                              },
-                            );
-                          setModal("");
-                          await refresh();
-                        });
-                      }}
-                    >
-                      <label>
-                        Técnico
-                        <select name="userId" required>
-                          <option value="">Selecione</option>
-                          {users
-                            .filter((u) => u.role === "TECNICO" && u.active)
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <label>
-                        Acesso
-                        <select name="permission">
-                          <option value="VIEW">Somente visualizar</option>
-                          <option value="CONTROL">
-                            Visualizar e controlar
-                          </option>
-                          <option value="NONE">Remover permissão</option>
-                        </select>
-                      </label>
-                      <button disabled={busy}>Aplicar permissão</button>
-                    </form>
-                  </>
-                )}
-                {history && (
-                  <>
-                    <hr />
-                    <h3>Histórico do computador</h3>
-                    {history.tickets.map((t) => (
-                      <p key={t.id}>
-                        {t.title} · {labels[t.status]}
-                      </p>
-                    ))}
-                    {history.sessions.map((s) => (
-                      <p key={s.id}>
-                        {date(s.requested_at)} · {labels[s.mode]}
-                        <small>
-                          {labels[s.status]} · {s.result}
-                        </small>
-                      </p>
-                    ))}
-                    {!history.tickets.length && !history.sessions.length && (
-                      <Empty text="Nenhum atendimento registrado." />
-                    )}
-                  </>
-                )}
               </>
             )}
           </section>
@@ -1363,100 +725,8 @@ function App() {
     </div>
   );
 }
-function Badge({ text, tone = "neutral" }: { text: string; tone?: string }) {
-  return (
-    <span className={"badge " + tone}>
-      <i />
-      {text}
-    </span>
-  );
-}
-function Empty({ text }: { text: string }) {
-  return (
-    <div className="empty">
-      <TicketIcon size={26} />
-      <p>{text}</p>
-    </div>
-  );
-}
-function LocationFilter({
-  devices,
-  value,
-  set,
-}: {
-  devices: Device[];
-  value: string;
-  set: (v: string) => void;
-}) {
-  return (
-    <select
-      aria-label="Localidade"
-      value={value}
-      onChange={(e) => set(e.target.value)}
-    >
-      <option value="">Todas as localidades</option>
-      {[...new Set(devices.map((d) => d.location))].map((l) => (
-        <option key={l}>{l}</option>
-      ))}
-    </select>
-  );
-}
-function TicketTable({
-  items,
-  open,
-}: {
-  items: Ticket[];
-  open: (id: string) => void;
-}) {
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Chamado</th>
-            <th>Solicitante</th>
-            <th>Prioridade</th>
-            <th>Estado</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((t) => (
-            <tr key={t.id}>
-              <td>
-                <b>{t.title}</b>
-                <small>
-                  #{t.id.slice(0, 8)} · {t.category}
-                </small>
-              </td>
-              <td>{t.requester_name ?? "—"}</td>
-              <td>
-                <Badge
-                  text={labels[t.priority]}
-                  tone={
-                    ["ALTA", "URGENTE"].includes(t.priority) ? "warn" : "muted"
-                  }
-                />
-              </td>
-              <td>
-                <Badge
-                  text={labels[t.status]}
-                  tone={t.status === "RESOLVIDO" ? "good" : "neutral"}
-                />
-              </td>
-              <td>
-                <button onClick={() => open(t.id)}>Abrir →</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!items.length && <Empty text="Nenhum chamado nesta lista." />}
-    </div>
-  );
-}
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    {isDesktop ? <DeviceApp /> : <App />}
   </React.StrictMode>,
 );

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms><EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <AssemblyName>UaiSuporte.Setup</AssemblyName><Version>0.6.1</Version>
+    <ApplicationIcon>../UaiSuporte.App/app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <EmbeddedResource Include="$(PayloadDirectory)/app.zip" LogicalName="app.zip" />
+    <EmbeddedResource Include="$(PayloadDirectory)/lab-ca.cer" LogicalName="lab-ca.cer" />
+    <EmbeddedResource Include="$(PayloadDirectory)/dependencies.json" LogicalName="dependencies.json" />
+    <EmbeddedResource Include="$(PayloadDirectory)/webview2-license.txt" LogicalName="webview2-license.txt" />
+  </ItemGroup>
+  <Target Name="RequirePayloads" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(PayloadDirectory)/app.zip')" Text="Use scripts/build-setup.sh para gerar os aplicativos incorporados." />
+  </Target>
+<ItemGroup><ProjectReference Include="../UaiSuporte.Receiving/UaiSuporte.Receiving.csproj" /><EmbeddedResource Include="$(PayloadDirectory)/meshagent.exe" LogicalName="meshagent.exe" /></ItemGroup>
+</Project>

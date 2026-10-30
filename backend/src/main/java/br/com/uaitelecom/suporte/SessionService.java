@@ -23,6 +23,7 @@ class SessionService {
     var copy = new LinkedHashMap<>(s);
     copy.remove("user_token_hash");
     copy.remove("share_id");
+    copy.remove("ticket_id");
     if ("ACTIVE".equals(copy.get("status"))
         && (copy.get("engine_seen_at") == null
             || Db.instant(copy.get("engine_seen_at")).isBefore(Instant.now().minusSeconds(10))))
@@ -32,7 +33,7 @@ class SessionService {
 
   List<Map<String, Object>> history(UUID device) {
     return db
-        .list("SELECT * FROM remote_session WHERE device_id=? ORDER BY requested_at DESC", device)
+        .list("SELECT s.*,u.name AS technician_name FROM remote_session s LEFT JOIN app_user u ON u.id=s.technician_id WHERE s.device_id=? ORDER BY s.requested_at DESC", device)
         .stream()
         .map(SessionService::publicSession)
         .toList();
@@ -41,31 +42,55 @@ class SessionService {
   List<Map<String, Object>> forDevice(UUID device) {
     sweep();
     return db.list(
-        "SELECT s.id,s.mode,s.status,s.expires_at,u.name AS technician FROM remote_session s JOIN"
+        "SELECT s.id,s.mode,s.status,s.expires_at,COALESCE(s.requester_name,u.name) AS technician FROM remote_session s LEFT JOIN"
             + " app_user u ON u.id=s.technician_id WHERE s.device_id=? AND s.ended_at IS NULL",
         device);
   }
 
   synchronized Map<String, Object> request(
-      Security.Actor a, UUID device, String mode, UUID ticket) {
+      Security.Actor a, UUID device, String mode) {
     Security.require(a.staff(), "Apenas técnicos e administradores.");
     Security.require(Set.of("VIEW", "CONTROL").contains(mode), "Modo inválido.");
     var d = access.deviceRow(a, device, mode.equals("CONTROL"));
+    return create(a, device, mode, d, false);
+  }
+
+  synchronized Map<String,Object> requestAssisted(Security.Actor a, String code, String mode, String ip) {
+    Security.require(!a.role().equals("LEITURA"),"Perfil de leitura não pode iniciar conexões.");
+    throttle("user:" + a.id(), 5);
+    throttle("ip:" + ip, 60);
+    Security.require(Set.of("VIEW", "CONTROL").contains(mode), "Modo inválido.");
+    var rows=db.list("SELECT * FROM device WHERE (public_code=? OR CAST(id AS VARCHAR)=?) AND revoked=FALSE AND (agent_health IS NULL OR agent_health='OK') AND last_seen>?",code.trim().replace(" ","").toUpperCase(Locale.ROOT),code.trim(),MonitoringService.deadline(db));
+    if(rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Código indisponível.");
+    UUID device=Db.id(rows.getFirst(),"id");
+    if(a.role().equals("OPERADOR"))Security.require(access.device(a,device,mode.equals("CONTROL")),"Dispositivo não autorizado para este operador.");
+    throttle("target:"+device,5);
+    Security.require(!a.device() || !a.id().equals(device),"Selecione outro computador.");
+    return create(a, device, mode, rows.getFirst(), true);
+  }
+
+  synchronized void throttle(String key, int limit) {
+    db.exec("DELETE FROM connection_attempt WHERE window_start<?", OffsetDateTime.now().minusMinutes(1));
+    String hash = Security.hash(key);
+    if (db.exists("SELECT 1 FROM connection_attempt WHERE attempt_key=? AND attempts>=?", hash, limit)) {
+      db.audit("connection", "CONNECTION_RATE_LIMIT", hash);
+      throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Muitas solicitações. Aguarde um minuto.");
+    }
+    if(db.exec("UPDATE connection_attempt SET attempts=attempts+1 WHERE attempt_key=?",hash)==0)
+      db.exec("INSERT INTO connection_attempt VALUES (?,1,?)",hash,OffsetDateTime.now());
+  }
+
+  private Map<String,Object> create(Security.Actor a, UUID device, String mode, Map<String,Object> d, boolean consentOnly) {
     Security.require(
         !Boolean.TRUE.equals(d.get("revoked"))
-            && Db.instant(d.get("last_seen")).isAfter(Instant.now().minusSeconds(30)),
+            && (d.get("agent_health")==null||"OK".equals(d.get("agent_health")))
+            && Db.instant(d.get("last_seen")).isAfter(MonitoringService.deadline(db).toInstant()),
         "Computador offline ou revogado.");
     if (!engine.enabled())
       throw new ResponseStatusException(
           HttpStatus.SERVICE_UNAVAILABLE,
           "Prova remota ainda não configurada; nenhum acesso foi iniciado.");
     Security.require(d.get("mesh_node") != null, "Vincule o Node ID do MeshCentral no cadastro.");
-    if (ticket != null) {
-      var t = access.ticket(a, ticket);
-      Security.require(
-          device.equals(Db.id(t, "device_id")),
-          "O chamado deve estar vinculado a este computador.");
-    }
     sweep();
     Security.require(
         !db.exists("SELECT 1 FROM remote_session WHERE device_id=? AND ended_at IS NULL", device),
@@ -73,16 +98,15 @@ class SessionService {
     UUID id = UUID.randomUUID();
     db.exec(
         "INSERT INTO remote_session"
-            + " (id,device_id,technician_id,user_token_hash,ticket_id,mode,status,requested_at,expires_at)"
-            + " VALUES (?,?,?,?,?,?,'PENDING',?,?)",
+            + " (id,device_id,technician_id,user_token_hash,mode,status,requested_at,expires_at,consent_only,requester_device_id,requester_name,requester_code)"
+            + " VALUES (?,?,?,?,?,'PENDING',?,?,?,?,?,?)",
         id,
         device,
-        a.id(),
+        a.device()?null:a.id(),
         a.tokenHash(),
-        ticket,
         mode,
         OffsetDateTime.now(),
-        OffsetDateTime.now().plusSeconds(60));
+        OffsetDateTime.now().plusSeconds(60), consentOnly, a.device()?a.id():null,a.name(),a.device()?db.one("SELECT public_code FROM device WHERE id=?",a.id()).get("public_code"):null);
     db.audit(a.id().toString(), "SESSION_REQUESTED", id);
     return get(a, id);
   }
@@ -90,7 +114,7 @@ class SessionService {
   Map<String, Object> get(Security.Actor a, UUID id) {
     var s = db.one("SELECT * FROM remote_session WHERE id=?", id);
     Security.require(
-        a.admin() || a.id().equals(Db.id(s, "technician_id")), "Sessão não autorizada.");
+        a.admin() || a.id().equals(Db.id(s, a.device()?"requester_device_id":"technician_id")), "Sessão não autorizada.");
     return publicSession(s);
   }
 
@@ -100,13 +124,14 @@ class SessionService {
       close(s, "LOCAL_STOP");
       return;
     }
-    Security.require(Set.of("accept", "reject").contains(decision), "Decisão inválida.");
+    Security.require(Set.of("accept", "accept-view", "reject").contains(decision), "Decisão inválida.");
     Security.require(
         s.get("status").equals("PENDING") && valid(s), "Solicitação encerrada ou expirada.");
     if (decision.equals("reject")) {
       close(s, "REJECTED");
       return;
     }
+    if(decision.equals("accept-view")) db.exec("UPDATE remote_session SET mode='VIEW' WHERE id=?",id);
     db.exec("UPDATE remote_session SET status='CONSENTED' WHERE id=? AND status='PENDING'", id);
     db.audit(device.toString(), "LOCAL_CONSENT", id);
   }
@@ -114,7 +139,7 @@ class SessionService {
   synchronized Map<String, String> launch(Security.Actor a, UUID id) {
     var s = db.one("SELECT * FROM remote_session WHERE id=?", id);
     Security.require(
-        a.id().equals(Db.id(s, "technician_id")) && a.tokenHash().equals(s.get("user_token_hash")),
+        a.id().equals(Db.id(s, a.device()?"requester_device_id":"technician_id")) && a.tokenHash().equals(s.get("user_token_hash")),
         "Sessão não autorizada.");
     Security.require(
         s.get("status").equals("CONSENTED") && valid(s),
@@ -147,12 +172,22 @@ class SessionService {
     }
   }
 
+  synchronized Map<String,Object> viewer(Security.Actor actor, UUID id, String clientIp) {
+    launch(actor,id);
+    var session=db.one("SELECT * FROM remote_session WHERE id=?",id);
+    try {
+      Security.require(valid(session),"Sessão revogada ou expirada.");
+      return engine.viewer(session.get("share_id").toString(),clientIp);
+    } catch(RuntimeException e) { close(session,"VIEWER_BOOTSTRAP_FAILED"); throw e; }
+  }
+
   boolean valid(Map<String, Object> s) {
     if (!Db.instant(s.get("expires_at")).isAfter(Instant.now())) return false;
     if (!db.exists(
-        "SELECT 1 FROM device WHERE id=? AND revoked=FALSE AND last_seen>?",
+        "SELECT 1 FROM device WHERE id=? AND revoked=FALSE AND (agent_health IS NULL OR agent_health='OK') AND last_seen>?",
         s.get("device_id"),
-        OffsetDateTime.now().minusSeconds(30))) return false;
+        MonitoringService.deadline(db))) return false;
+    if(s.get("requester_device_id")!=null) return db.exists("SELECT 1 FROM device WHERE id=? AND agent_hash=? AND revoked=FALSE AND (agent_health IS NULL OR agent_health='OK') AND last_seen>?",s.get("requester_device_id"),s.get("user_token_hash"),MonitoringService.deadline(db));
     var users =
         db.list(
             "SELECT u.* FROM app_user u JOIN user_session x ON x.user_id=u.id WHERE u.id=? AND"
@@ -161,12 +196,14 @@ class SessionService {
             s.get("user_token_hash"),
             OffsetDateTime.now());
     if (users.isEmpty()) return false;
+    if ("LEITURA".equals(users.getFirst().get("panel_role"))) return false;
+    if (Boolean.TRUE.equals(s.get("consent_only")) && !"OPERADOR".equals(users.getFirst().get("panel_role"))) return true;
     var u = users.getFirst();
     return access.device(
         new Security.Actor(
             Db.id(u, "id"),
             u.get("name").toString(),
-            u.get("role").toString(),
+            Objects.toString(u.get("panel_role"),u.get("role").toString()),
             s.get("user_token_hash").toString()),
         Db.id(s, "device_id"),
         s.get("mode").equals("CONTROL"));
@@ -174,7 +211,7 @@ class SessionService {
 
   synchronized void stop(Security.Actor a, UUID id) {
     get(a, id);
-    close(db.one("SELECT * FROM remote_session WHERE id=?", id), "TECHNICIAN_STOP");
+    close(db.one("SELECT * FROM remote_session WHERE id=?", id), "REQUESTER_STOP");
   }
 
   synchronized void close(Map<String, Object> s, String result) {
@@ -205,7 +242,7 @@ class SessionService {
         confirmedEnd,
         result,
         s.get("id"));
-    db.audit(s.get("technician_id").toString(), "SESSION_" + result, s.get("id"));
+    db.audit(Objects.toString(s.get("requester_device_id"),Objects.toString(s.get("technician_id"),"unknown")), "SESSION_" + result, s.get("id"));
   }
 
   void observe(Map<String, Object> s) {
@@ -268,7 +305,7 @@ class SessionService {
             .contains(Objects.toString(state.reason(), ""))) {
           db.exec("UPDATE remote_session SET result=? WHERE id=?", state.reason(), ended.get("id"));
           db.audit(
-              ended.get("technician_id").toString(), "SESSION_" + state.reason(), ended.get("id"));
+              Objects.toString(ended.get("requester_device_id"),Objects.toString(ended.get("technician_id"),"unknown")), "SESSION_" + state.reason(), ended.get("id"));
         }
       } catch (RuntimeException ignored) {
         /* Keep confirmed disconnect, never invent a reason. */

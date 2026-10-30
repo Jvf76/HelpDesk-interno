@@ -1,3 +1,5 @@
+> Registro histórico anterior ao escopo0.3. O produto atual é exclusivamente acesso remoto, sem chamados. Para operação e limitações atuais, use [o guia0.3](10-acesso-remoto-03.md).
+
 # Análise da referência e decisão de arquitetura
 
 Inspeção em 26/10/2026. Workspace inicialmente vazio, sem repositório Git nem arquivos existentes. Nenhuma alteração preexistente foi sobrescrita.

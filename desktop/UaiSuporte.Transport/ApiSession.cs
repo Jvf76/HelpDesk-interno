@@ -8,14 +8,16 @@ namespace UaiSuporte.Transport;
 public record ApiReply(int Status, string Body);
 public sealed class ApiSession : IDisposable
 {
-    public const string LocalOrigin = "https://uai-technician.invalid";
+    public const string LocalOrigin = "https://uai-suporte.invalid";
     public const string ServerOrigin = "https://suporte.internal";
     readonly HttpClient http;
+    readonly Func<(string Id,string Credential)?>? device;
     readonly SemaphoreSlim gate = new(1);
-    public ApiSession(HttpMessageHandler? testHandler = null)
+    public ApiSession(HttpMessageHandler? testHandler = null, Func<(string Id,string Credential)?>? deviceIdentity = null)
     {
+        device=deviceIdentity;
         http = new HttpClient(testHandler ?? new HttpClientHandler {
-            AllowAutoRedirect = false, UseCookies = true, CookieContainer = new CookieContainer()
+            AllowAutoRedirect = false, UseCookies = deviceIdentity == null, CookieContainer = new CookieContainer()
         }) { BaseAddress = new Uri(ServerOrigin), Timeout = TimeSpan.FromSeconds(12) };
     }
     public static bool TrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -23,26 +25,34 @@ public sealed class ApiSession : IDisposable
         && uri.Query.Length == 0 && uri.UserInfo.Length == 0;
     public static bool Allowed(string method, string path)
     {
-        // No arbitrary URL, headers, redirects, agents or remote launch in this proof.
+        // No arbitrary URL, headers, redirects, agent endpoints or retired ticket routes.
         if (!Regex.IsMatch(path, @"^/[a-zA-Z0-9/-]+$")) return false;
         var id = @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
         return method switch {
-            "GET" => Regex.IsMatch(path, $@"^/(auth/me|users|devices|tickets|(?:devices|tickets|sessions)/{id}|devices/{id}/(?:history|permissions))$"),
-            "POST" => Regex.IsMatch(path, $@"^/(auth/(?:login|logout)|users|devices|tickets|devices/{id}/(?:enrollment|revoke)|tickets/{id}/comments|sessions/{id}/stop)$"),
-            "PUT" => Regex.IsMatch(path, $@"^/((?:users|devices|tickets)/{id}|devices/{id}/permissions)$"),
+            "GET" => Regex.IsMatch(path, $@"^/(auth/me|users|devices|connections|(?:devices|sessions)/{id}|devices/{id}/(?:history|permissions))$"),
+            "POST" => Regex.IsMatch(path, $@"^/(auth/(?:login|logout)|users|devices|devices/register|sessions|connections|devices/{id}/(?:enrollment|recovery|revoke)|sessions/{id}/(?:stop|launch))$"),
+            "PUT" => Regex.IsMatch(path, $@"^/((?:users|devices)/{id}|devices/{id}/permissions)$"),
             "DELETE" => Regex.IsMatch(path, $@"^/devices/{id}/permissions/{id}$"),
             _ => false
         };
     }
+    public static bool AllowedDevice(string method,string path) =>
+        method=="GET" && Regex.IsMatch(path,@"^/(identity|connections|sessions/[0-9a-fA-F-]{36})$") ||
+        method=="POST" && Regex.IsMatch(path,@"^/(connections|sessions/[0-9a-fA-F-]{36}/(stop|launch))$");
     public async Task<ApiReply> Send(string source, string path, string method, string? body, string? csrf)
     {
-        if (!TrustedSource(source) || !Allowed(method,path) || (body?.Length ?? 0)>131072)
+        if (!TrustedSource(source) || !(device==null?Allowed(method,path):AllowedDevice(method,path)) || (body?.Length ?? 0)>131072)
             return Error(403,"Operação não autorizada neste aplicativo.");
-        if (method != "GET" && path != "/auth/login" && string.IsNullOrWhiteSpace(csrf))
+        if (device==null && method != "GET" && path != "/auth/login" && string.IsNullOrWhiteSpace(csrf))
             return Error(403,"Proteção CSRF: sessão inválida. Entre novamente.");
         await gate.WaitAsync();
         try {
-            using var request = new HttpRequestMessage(new HttpMethod(method), "/api"+path);
+            using var request = new HttpRequestMessage(new HttpMethod(method), device==null?"/api"+path:"/api/desktop"+path);
+            if(device!=null) {
+                var identity=device();if(identity==null)return Error(401,"Ativação necessária ou cadastro local inválido.");
+                request.Headers.Authorization=new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",identity.Value.Credential);
+                request.Headers.Add("X-Uai-Device",identity.Value.Id);
+            }
             if (body != null) {
                 using var parsed = JsonDocument.Parse(body);
                 request.Content = new StringContent(body,Encoding.UTF8,"application/json");
@@ -61,6 +71,8 @@ public sealed class ApiSession : IDisposable
             }
             return new((int)response.StatusCode,content);
         }
+        catch (System.Security.Cryptography.CryptographicException) {return Error(409,"Cadastro local corrompido ou pertencente a outro Windows. Solicite recuperação administrativa.");}
+        catch (InvalidDataException) {return Error(409,"Cadastro local incompleto. Solicite recuperação administrativa.");}
         catch (HttpRequestException e) when (e.HttpRequestError == HttpRequestError.SecureConnectionError || e.InnerException is AuthenticationException) {
             return Error(495,"Certificado TLS não confiável, vencido ou incompatível com o servidor. Confira a CA do laboratório, o nome e a data do Windows. A conexão foi bloqueada.");
         }
