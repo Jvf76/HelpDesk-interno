@@ -295,6 +295,18 @@ class DeviceController {
     return Map.of("requests", sessions.forDevice(Db.id(d, "id")), "serverTime", Instant.now());
   }
 
+  record LocalStop(@NotNull @Pattern(regexp="LOCAL_STOP|PRESENTER_LOST|SESSION_CHANGED|SERVICE_STOP|NETWORK_FAILURE") String reason) {}
+  @PostMapping("/agent/stop-access")
+  void stopAccess(@Valid @RequestBody LocalStop stop,HttpServletRequest r){
+    var d=agent(r);var device=Db.id(d,"id");
+    for(var session:db.list("SELECT id FROM remote_session WHERE device_id=? AND ended_at IS NULL",device)){
+      var id=Db.id(session,"id");sessions.decide(device,id,"stop");
+      db.exec("UPDATE remote_session SET result=? WHERE id=?",stop.reason(),id);
+    }
+    db.exec("UPDATE device SET agent_health='STOPPED' WHERE id=?",device);
+    db.audit(device.toString(),"LOCAL_ACCESS_STOP_"+stop.reason(),device);
+  }
+
   @PostMapping("/agent/offline")
   void offline(HttpServletRequest r) {
     var d=agent(r);

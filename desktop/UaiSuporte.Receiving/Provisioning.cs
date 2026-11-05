@@ -4,10 +4,10 @@ using System.Security.Cryptography;
 using System.Text.Json;
 namespace UaiSuporte.Agent;
 
-// Interactive-user scope. Installer rejects elevation under a different Windows account.
+// Service-owned machine identity. No credential is returned through the local UI protocol.
 public static class Provisioning {
  public const string MeshHash="4cb9aab0e6f9d90249f29bf15e46e66c702a282bc9f991bbb9b6ef0b78478019";
- public static string Storage=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"UaiTelecom","UaiSuporte");
+ public static string Storage=>DeviceStore.Root;
  static HttpClient Client()=>new(new HttpClientHandler{AllowAutoRedirect=false}){BaseAddress=new("https://suporte.internal/"),Timeout=TimeSpan.FromSeconds(10)};
  static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
  public static void RequireCommittedInstallation(){
@@ -70,19 +70,27 @@ public static class Provisioning {
   } finally {mesh.Stop();}
  }
  // Installation prepares signed local components only. First activation claims the device.
- public static void PrepareForActivation(string source) {
+ public static void PrepareForActivation(string source, Action<string>? audit = null) {
+  // Only constant stage identifiers reach the installer log. Never log credentials or source paths.
+  audit?.Invoke("LOCAL_PREP_CHECK_EMPTY");
   if(HasIdentity || Directory.Exists(Path.Combine(Storage,"Mesh"))) throw new InvalidOperationException("Cadastro local existente; nenhum arquivo foi substituído.");
+  audit?.Invoke("LOCAL_PREP_VERIFY_HASH");
   if(!Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(source))).Equals(MeshHash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Hash do MeshAgent recusado.");
+  audit?.Invoke("LOCAL_PREP_VERIFY_SIGNATURE");
   UaiSuporte.Setup.Authenticode.RequireValid(source);
-  var folder=Directory.CreateDirectory(Path.Combine(Storage,"Mesh"));
-  var acl=new System.Security.AccessControl.DirectorySecurity();acl.SetAccessRuleProtection(true,false);
-  using var user=System.Security.Principal.WindowsIdentity.GetCurrent();
-  var owner=user.User??throw new InvalidOperationException();acl.SetOwner(owner);
-  foreach(var sid in new[]{owner,new System.Security.Principal.SecurityIdentifier("S-1-5-18"),new System.Security.Principal.SecurityIdentifier("S-1-5-32-544")})
-   acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(sid,System.Security.AccessControl.FileSystemRights.FullControl,System.Security.AccessControl.InheritanceFlags.ContainerInherit|System.Security.AccessControl.InheritanceFlags.ObjectInherit,System.Security.AccessControl.PropagationFlags.None,System.Security.AccessControl.AccessControlType.Allow));
-  System.IO.FileSystemAclExtensions.SetAccessControl(folder,acl);
-  string exe=Path.Combine(folder.FullName,"MeshAgent.exe");File.Copy(source,exe,false);
-  ReceiverWindow.Save("setup.bin",new Setup("https://suporte.internal",exe,MeshHash,null));
+  audit?.Invoke("LOCAL_PREP_SECURE_ROOT");
+  DeviceStore.SecureDirectory(Storage);
+  audit?.Invoke("LOCAL_PREP_SECURE_MOTOR_DIRECTORY");
+  string folder=Path.Combine(Storage,"Mesh");
+  // An elevated administrator can assign the Administrators group as owner. Assigning
+  // SYSTEM requires an additional restore privilege and is unnecessary for this ACL.
+  // SYSTEM and Administrators retain FullControl; ordinary users receive no access.
+  DeviceStore.SecureDirectory(folder);
+  audit?.Invoke("LOCAL_PREP_COPY_MOTOR");
+  string exe=Path.Combine(folder,"MeshAgent.exe");File.Copy(source,exe,false);
+  audit?.Invoke("LOCAL_PREP_PROTECT_CONFIGURATION");
+  DeviceStore.Save("setup.bin",new Setup("https://suporte.internal",exe,MeshHash,null));
+  audit?.Invoke("LOCAL_PREP_COMPLETE");
  }
  public static async Task CompleteBinding(Func<string,string,Task<string>> register, CancellationToken cancellation) {
   cancellation.ThrowIfCancellationRequested();

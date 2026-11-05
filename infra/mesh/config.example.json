@@ -22,6 +22,7 @@
         "title": "Uai Suporte",
         "desktop": "{0} solicita visualizar ou controlar esta tela. Permitir?",
         "consentTimeout": 30,
+        "oldStyle": true,
         "autoAcceptOnTimeout": false,
         "autoAcceptIfNoUser": false,
         "autoAcceptIfDesktopNoUser": false,

@@ -3,7 +3,11 @@ namespace UaiSuporte.Agent;
 // Separate native windows: border ignores input; the bar alone accepts clicks.
 // Secure desktop, display changes and indicator failure terminate the session.
 sealed class SessionIndicator : IDisposable {
+ [System.Runtime.InteropServices.DllImport("user32.dll")]static extern bool IsWindowVisible(IntPtr window);
+ [System.Runtime.InteropServices.DllImport("dwmapi.dll")]static extern int DwmGetWindowAttribute(IntPtr window,int attribute,out int value,int size);
+ static bool Shown(Form w)=>!w.IsDisposed&&w.IsHandleCreated&&w.Visible&&w.WindowState!=FormWindowState.Minimized&&IsWindowVisible(w.Handle)&&DwmGetWindowAttribute(w.Handle,14,out int cloaked,4)==0&&cloaked==0;
  readonly List<Form> windows=[];
+ readonly Rectangle[] displays=Screen.AllScreens.Select(s=>s.Bounds).ToArray();
  readonly System.Windows.Forms.Timer timer=new(){Interval=500};
  readonly DateTimeOffset began=DateTimeOffset.UtcNow;
  readonly Action failure;
@@ -21,7 +25,7 @@ sealed class SessionIndicator : IDisposable {
     foreach(var form in new Form[]{border,bar}) {form.FormClosed+=(_,_)=>{if(!disposing)failure();};windows.Add(form);form.Show();}
    }
    timer.Tick+=(_,_)=>{
-    if(windows.Count!=Screen.AllScreens.Length*2||windows.Any(w=>w.IsDisposed||!w.Visible||w.WindowState==FormWindowState.Minimized)){failure();return;}
+    if(!Healthy){failure();return;}
     foreach(var w in windows) {
      w.TopMost=true;
      foreach(Control c in w.Controls)if(c is Label label)label.Text=label.Tag+" • "+(DateTimeOffset.UtcNow-began).ToString(@"mm\:ss");
@@ -30,6 +34,7 @@ sealed class SessionIndicator : IDisposable {
    timer.Start();
   } catch {Dispose();throw;}
  }
+ public bool Healthy=>!disposing&&InteractiveDesktop.Available()&&windows.Count==displays.Length*2&&displays.SequenceEqual(Screen.AllScreens.Select(s=>s.Bounds))&&windows.All(Shown);
  public void Dispose(){if(disposing)return;disposing=true;timer.Dispose();foreach(var w in windows)w.Dispose();windows.Clear();}
  sealed class BorderWindow:Form {
   public BorderWindow(Rectangle bounds) {

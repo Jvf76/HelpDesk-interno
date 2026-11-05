@@ -4,10 +4,11 @@ cd "$(dirname "$0")/.."
 repo="$PWD"
 dotnet_bin="${DOTNET_ROOT:-$repo/.tools/dotnet}/dotnet"
 mkdir -p dist
-if [[ -e dist/UaiSuporte-Setup-0.6.1-Lab.exe ]]; then echo "Artifact exists; use a new version or an explicit review before rebuilding." >&2; exit 1; fi
-stage="$(mktemp -d "$repo/dist/setup-061-XXXXXX")"
+if [[ -e dist/UaiSuporte-Setup-0.8.0-Lab.exe || -e dist/inno-080/UaiSuporte-Setup-0.8.0-Lab.exe || -e /home/agenda/uai-entregas/UaiSuporte-Setup-0.8.0-Lab.exe ]]; then echo "Artifact exists; use a new version or an explicit review before rebuilding." >&2; exit 1; fi
+stage="$(mktemp -d "${UAI_STAGE_ROOT:-$repo/dist}/setup-080-XXXXXX")"
 (cd frontend && npm ci && npm run build)
 "$dotnet_bin" publish desktop/UaiSuporte.App -c Release -r win-x64 --self-contained true -o "$stage/app"
+"$dotnet_bin" publish desktop/UaiSuporte.Service -c Release -r win-x64 --self-contained true -o "$stage/app/Service"
 python3 - "$stage" <<'PY'
 import pathlib, sys, zipfile, shutil, hashlib, json, os
 stage=pathlib.Path(sys.argv[1]); (stage/'payload').mkdir()
@@ -26,19 +27,26 @@ ca=pathlib.Path('.tools/lab/exports/uai-lab-ca.cer')
 assert hashlib.sha256(ca.read_bytes()).hexdigest()=='a1ffb98eb2364bb6ef0b30f5fd5ae61f1689fffba1ca6f1510641ead624d7138'
 shutil.copy(ca,stage/'payload/lab-ca.cer')
 shutil.copy(deps/'webview2-license.txt',stage/'payload/webview2-license.txt')
-(stage/'payload/dependencies.json').write_text(json.dumps(dict(webview2Fixed=runtime_proof,receivingValidated=False,meshAgentIncluded=True,meshAgentSha256=provenance['sha256'],meshAgentPublisher=provenance['publisher'],version='0.6.1')))
+(stage/'payload/dependencies.json').write_text(json.dumps(dict(webview2Fixed=runtime_proof,receivingValidated=False,meshAgentIncluded=True,meshAgentSha256=provenance['sha256'],meshAgentPublisher=provenance['publisher'],version='0.8.0')))
 for profile in ['app']:
     root=stage/profile
-    shutil.copytree(runtime,root/'Runtime',copy_function=os.link)
+    def link_or_copy(source,destination):
+        try: os.link(source,destination)
+        except OSError: shutil.copy2(source,destination)
+    shutil.copytree(runtime,root/'Runtime',copy_function=link_or_copy)
     entries={str(file.relative_to(runtime)).replace('\\','/'):hashlib.sha256(file.read_bytes()).hexdigest() for file in runtime.rglob('*') if file.is_file()}
     assert entries==json.loads(pathlib.Path('desktop/webview2-fixed-files.json').read_text()), 'Runtime files differ from verified CAB extraction'
     (root/'runtime-files.json').write_text(json.dumps(entries,indent=2))
     shutil.copy('docs/17-cadastro-integrado-lab.md',root/'INSTALACAO.md')
     shutil.copy('docs/18-assistente-windows.md',root/'ASSISTENTE-LAB.md')
-    shutil.copy('docs/21-ativacao-dispositivo.md',root/'ATIVACAO-0.6.1.md')
+    shutil.copy('docs/21-ativacao-dispositivo.md',root/'ATIVACAO-0.8.0.md')
     shutil.copy('docs/24-inventario-monitoramento.md',root/'MONITORAMENTO.md')
     shutil.copy('docs/23-componente-remoto-integrado.md',root/'COMPONENTE-INTERNO.md')
-    shutil.copy('docs/10-acesso-remoto-03.md',root/'LEIA-ME.md')
+    shutil.copy('docs/26-aplicativo-receptor.md',root/'APLICATIVO-RECEPTOR.md')
+    shutil.copy('docs/27-servico-corporativo.md',root/'LEIA-ME.md')
+    shutil.copy('docs/27-servico-corporativo.md',root/'SERVICO-CORPORATIVO.md')
+    shutil.copy('docs/28-correcao-preparacao-071.md',root/'CORRECAO-071.md')
+    shutil.copy('docs/31-lab-080-prova-remota.md',root/'PROVA-REMOTA-080.md')
     licenses=root/'licenses'; licenses.mkdir(exist_ok=True)
     for notice in pathlib.Path('agent/licenses').glob('*.txt'):
         shutil.copy(notice, licenses/notice.name)
@@ -63,6 +71,6 @@ fi
 "$dotnet_bin" publish desktop/UaiSuporte.Setup -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
   -p:PayloadDirectory="$stage/payload" -o "$stage/setup"
-cp "$stage/setup/UaiSuporte.Setup.exe" dist/UaiSuporte-Setup-0.6.1-Lab.exe
-sha256sum dist/UaiSuporte-Setup-0.6.1-Lab.exe > dist/setup-0.6.1-SHA256SUMS.txt
-cat dist/setup-0.6.1-SHA256SUMS.txt
+cp "$stage/setup/UaiSuporte.Setup.exe" dist/UaiSuporte-Setup-0.8.0-Lab.exe
+sha256sum dist/UaiSuporte-Setup-0.8.0-Lab.exe > dist/setup-0.8.0-SHA256SUMS.txt
+cat dist/setup-0.8.0-SHA256SUMS.txt

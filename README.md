@@ -1,3 +1,9 @@
+**Corretivo LAB 0.7.1:** preparação local com propriedade administrativa e diagnóstico por etapa. [Pacote e limitações](docs/28-correcao-preparacao-071.md). Instalação Windows ainda pendente; 0.7.0 preservado.
+
+**Candidato corporativo LAB 0.7.0 em validação:** serviço Windows separado da interface, credencial protegida do serviço, presença/métricas independentes da janela e canal local supervisionado. [Arquitetura, testes e limitações](docs/27-servico-corporativo.md). Os instaladores anteriores não contêm esta revisão. Não homologado em Windows real; não distribuir aos funcionários.
+
+**Fluxo atualizado — LAB 0.6.2:** aplicativo Windows somente receptor, com bandeja e início ao entrar no Windows. Conexões iniciadas exclusivamente pelo painel web autorizado. [Comportamento, migração e limites](docs/26-aplicativo-receptor.md). Validação de bandeja/consentimento no Windows real pendente.
+
 **Nova entrega LAB 0.6.1:** instalador único com componente remoto interno, ativação e coletor de monitoramento. Painel administrativo somente web. [Arquivo, hash, testes e limitações de atualização](docs/25-instalador-lab-061.md). Validação desta versão no Windows pendente; LAB 0.6.0 preservado.
 
 **Monitoramento no laboratório:** inventário paginado, dashboard web com login, papéis ADMIN/OPERADOR/LEITURA e coletor Windows. [Arquitetura, API, retenção e limites](docs/24-inventario-monitoramento.md). Código novo não incluído no instalador 0.6.0 já entregue; validação real do coletor em Windows pendente.
@@ -83,4 +89,11 @@ funcionários. Nenhum MeshAgent não aprovado acompanha a entrega.
 
 A integração de apresentação para o próximo pacote está descrita em
 [distribuição única](docs/23-componente-remoto-integrado.md). O LAB 0.6.0 já entregue
-não foi substituído. Atualização no lugar da instalação ainda não é suportada.
+não foi substituído. O candidato [LAB 0.8.0](docs/31-lab-080-prova-remota.md)
+implementa atualização sobre 0.6.0, com preservação de identidade e rollback.
+A atualização real e a migração DPAPI ainda aguardam prova no Windows.
+Os 60 segundos de uso começam somente na ativação visual, sem consumir o tempo
+de consentimento. O pacote inclui diagnóstico por UUID da sessão Windows do
+consentimento nativo, mantendo ambas as autorizações locais. Backend, relay e
+controlador correspondentes foram preparados, sem implantação no laboratório
+em execução. Não é uma versão definitiva nem acesso remoto homologado.

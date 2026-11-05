@@ -22,7 +22,7 @@ class MeshConnectionTest {
     var reply = engine.command(Map.of("action", "nodes"));
     assertTrue(reply.has("nodes"));
     var capabilities = engine.command(Map.of("action", "uaiSessionCapabilities"));
-    assertEquals(1, capabilities.path("version").asInt());
+    assertEquals(3, capabilities.path("version").asInt());
     assertTrue(capabilities.path("oneConnection").asBoolean());
     assertEquals("UNKNOWN", engine.observe("test-missing-share", false, false).state());
   }

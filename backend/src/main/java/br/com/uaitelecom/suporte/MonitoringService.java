@@ -16,7 +16,7 @@ class MonitoringService {
  MonitoringService(Db db,ObjectMapper json){this.db=db;this.json=json;}
  record Disk(@NotBlank @Pattern(regexp="[A-Za-z]:") String volume,@Positive long totalBytes,@PositiveOrZero long freeBytes) {}
  record Sample(@DecimalMin("0") @DecimalMax("100") Double cpuPercent,@Positive long memoryTotal,@PositiveOrZero long memoryAvailable,@NotNull @Size(max=32) List<@Valid Disk> disks) {}
- record Report(@NotBlank @Size(max=120) String machineName,@NotBlank @Size(max=200) String os,@Size(max=200) String windowsUser,@NotBlank @Size(max=40) String appVersion,@NotBlank @Size(max=80) String agentVersion,@Size(max=200) @Pattern(regexp="[0-9a-fA-F:., ]*") String internalIp,@PositiveOrZero long uptimeSeconds,@NotNull @Pattern(regexp="OK|MISSING|INVALID|UNBOUND|STOPPED|ERROR") String health,@Valid Sample metrics) {}
+ record Report(@NotBlank @Size(max=120) String machineName,@NotBlank @Size(max=200) String os,@Size(max=200) String windowsUser,@NotBlank @Size(max=40) String appVersion,@NotBlank @Size(max=80) String agentVersion,@Size(max=200) @Pattern(regexp="[0-9a-fA-F:., ]*") String internalIp,@PositiveOrZero long uptimeSeconds,@NotNull @Pattern(regexp="OK|MISSING|INVALID|UNBOUND|STOPPED|ERROR") String health,@Valid Sample metrics,@Null UUID deviceId,@Pattern(regexp="RUNNING|ERROR") String serviceState,OffsetDateTime observedAt) {}
  record Config(@Min(15) @Max(120) int heartbeatSeconds,@Min(30) @Max(600) int metricsSeconds,@Min(45) @Max(600) int offlineSeconds,@Min(1) @Max(100) double cpuLimit,@Min(1) @Max(100) double memoryLimit,@Min(1) @Max(99) double diskFreeLimit,@Min(60) @Max(3600) int durationSeconds,@Min(120) @Max(604800) int silentSeconds,@Min(1) @Max(7) int detailDays,@Min(7) @Max(365) int hourlyDays,@Min(30) @Max(3650) int eventDays,@NotNull @Size(max=40) String expectedApp,@NotNull @Size(max=80) String expectedAgent) {}
  Map<String,Object> config(){var c=new LinkedHashMap<>(db.one("SELECT * FROM monitoring_config WHERE id=1"));c.remove("rollup_until");return c;}
  static int number(Map<String,Object> r,String key){return ((Number)r.get(key)).intValue();}
@@ -27,12 +27,14 @@ class MonitoringService {
   var d=db.one("SELECT * FROM device WHERE id=? FOR UPDATE",id);
   Security.require(!Boolean.TRUE.equals(d.get("revoked")),"Dispositivo revogado.");
   var c=config();var now=OffsetDateTime.now();
+  Security.require(r.observedAt()==null||(!r.observedAt().isAfter(now.plusSeconds(30))&&!r.observedAt().isBefore(now.minusMinutes(2))),"Horário de coleta inválido.");
   // A row lock makes concurrent samples obey the same per-device admission interval.
   if(!Db.instant(d.get("last_seen")).isBefore(now.toInstant().minusSeconds(5)))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,"Aguarde antes de enviar outra presença.");
   boolean gap=Db.instant(d.get("last_seen")).isBefore(now.toInstant().minusSeconds(number(c,"offline_seconds")));
   if(gap)db.exec("UPDATE device SET online_since=?,cpu_high_since=NULL,memory_high_since=NULL,disk_low_since=NULL,error_since=NULL WHERE id=?",now,id);
   if(!Objects.equals(r.health(),d.get("agent_health")))db.exec("INSERT INTO device_event VALUES (?,?,?,?)",UUID.randomUUID(),id,"AGENT_"+r.health(),now);
   db.exec("UPDATE device SET name=?,os=?,windows_user=?,app_version=?,agent_version=?,internal_ip=?,public_ip=?,uptime_seconds=?,boot_at=?,last_seen=?,agent_health=?,error_since=CASE WHEN ?='OK' THEN NULL ELSE COALESCE(error_since,?) END WHERE id=? AND revoked=FALSE",r.machineName(),r.os(),r.windowsUser(),r.appVersion(),r.agentVersion(),r.internalIp(),publicIp,r.uptimeSeconds(),now.minusSeconds(Math.min(r.uptimeSeconds(),315576000L)),now,r.health(),r.health(),now,id);
+  db.exec("UPDATE device SET service_state=?,collected_at=? WHERE id=?",r.serviceState(),r.observedAt()==null?now:r.observedAt(),id);
   Sample m=r.metrics();
   if(m!=null&&Db.instant(d.get("metric_at")).isBefore(now.toInstant().minusSeconds(Math.max(15,number(c,"metrics_seconds")/2)))) {
    Security.require(m.cpuPercent()==null||Double.isFinite(m.cpuPercent()),"CPU inválida.");
@@ -78,5 +80,8 @@ class MonitoringService {
   // Administrative/access audit is never deleted by the metrics retention job.
  }
  @Scheduled(fixedDelay=60000,initialDelay=60000)
- public void fleet(){var cutoff=deadline(db);db.exec("INSERT INTO fleet_metric SELECT ?,COUNT(*),COALESCE(SUM(CASE WHEN revoked=FALSE AND last_seen>=? THEN 1 ELSE 0 END),0),COALESCE(SUM(CASE WHEN revoked=FALSE AND (last_seen IS NULL OR last_seen<?) THEN 1 ELSE 0 END),0),(SELECT COUNT(DISTINCT device_id) FROM remote_session WHERE status='ACTIVE' AND ended_at IS NULL),AVG(CASE WHEN revoked=FALSE AND last_seen>=? AND metric_at>=? THEN cpu_pct ELSE NULL END),AVG(CASE WHEN revoked=FALSE AND last_seen>=? AND metric_at>=? THEN memory_pct ELSE NULL END) FROM device",OffsetDateTime.now(),cutoff,cutoff,cutoff,cutoff,cutoff,cutoff);}
+ public void fleet(){var cutoff=deadline(db);db.exec("INSERT INTO fleet_metric(observed_at,total,online,offline,in_session,cpu_pct,memory_pct) SELECT ?,COUNT(*),COALESCE(SUM(CASE WHEN revoked=FALSE AND last_seen>=? THEN 1 ELSE 0 END),0),COALESCE(SUM(CASE WHEN revoked=FALSE AND (last_seen IS NULL OR last_seen<?) THEN 1 ELSE 0 END),0),(SELECT COUNT(DISTINCT device_id) FROM remote_session WHERE status='ACTIVE' AND ended_at IS NULL),AVG(CASE WHEN revoked=FALSE AND last_seen>=? AND metric_at>=? THEN cpu_pct ELSE NULL END),AVG(CASE WHEN revoked=FALSE AND last_seen>=? AND metric_at>=? THEN memory_pct ELSE NULL END) FROM device",OffsetDateTime.now(),cutoff,cutoff,cutoff,cutoff,cutoff,cutoff);
+  var c=config();var stable=OffsetDateTime.now().minusSeconds(number(c,"duration_seconds"));
+  db.exec("UPDATE fleet_metric SET silent=(SELECT COUNT(*) FROM device WHERE revoked=FALSE AND (last_seen IS NULL OR last_seen<?)), high_usage=(SELECT COUNT(*) FROM device WHERE revoked=FALSE AND last_seen>=? AND metric_at>=? AND (cpu_high_since<=? OR memory_high_since<=? OR disk_low_since<=?)) WHERE observed_at=(SELECT MAX(observed_at) FROM fleet_metric)",OffsetDateTime.now().minusSeconds(number(c,"silent_seconds")),cutoff,cutoff,stable,stable,stable);
+ }
 }

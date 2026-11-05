@@ -51,6 +51,7 @@ class MeshEngine implements RemoteEngine {
     var ready = new CompletableFuture<Void>();
     var response = new CompletableFuture<JsonNode>();
     WebSocket ws = null;
+    long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(8);
     try {
       ws =
           client
@@ -113,10 +114,10 @@ class MeshEngine implements RemoteEngine {
                       return null;
                     }
                   })
-              .get(6, TimeUnit.SECONDS);
-      ready.get(6, TimeUnit.SECONDS);
-      ws.sendText(json.writeValueAsString(payload), true).get(3, TimeUnit.SECONDS);
-      var result = response.get(10, TimeUnit.SECONDS);
+              .get(Math.max(1,deadline-System.nanoTime()), TimeUnit.NANOSECONDS);
+      ready.get(Math.max(1,deadline-System.nanoTime()), TimeUnit.NANOSECONDS);
+      ws.sendText(json.writeValueAsString(payload), true).get(Math.max(1,deadline-System.nanoTime()), TimeUnit.NANOSECONDS);
+      var result = response.get(Math.max(1,deadline-System.nanoTime()), TimeUnit.NANOSECONDS);
       if (result.has("result") && !"OK".equalsIgnoreCase(result.path("result").asText()))
         throw new IllegalStateException("Operação recusada pelo motor");
       return result;
@@ -135,7 +136,10 @@ class MeshEngine implements RemoteEngine {
 
   public Share create(String node, String guest, boolean viewOnly) {
     var capabilities = command(Map.of("action", "uaiSessionCapabilities"));
-    if (capabilities.path("version").asInt() != 1
+    if (capabilities.path("version").asInt() != 3
+        || !capabilities.path("renderAck").asBoolean()
+        || capabilities.path("activeSeconds").asInt()!=60
+        || capabilities.path("setupSeconds").asInt()!=120
         || !capabilities.path("relayTelemetry").asBoolean()
         || !capabilities.path("oneConnection").asBoolean()
         || capabilities.path("leaseSeconds").asInt() != 12)
@@ -155,7 +159,7 @@ class MeshEngine implements RemoteEngine {
                 "consent",
                 72,
                 "expire",
-                1,
+                3,
                 "viewOnly",
                 viewOnly));
     String id = result.path("publicid").asText(), link = result.path("url").asText();
@@ -181,7 +185,7 @@ class MeshEngine implements RemoteEngine {
             .path("session");
     String state = s.path("state").asText();
     if (!Set.of(
-            "UNKNOWN", "READY", "CONNECTING", "AWAITING_CONSENT", "CONSENTED", "ACTIVE", "ENDED")
+            "UNKNOWN", "READY", "CONNECTING", "AWAITING_CONSENT", "CONSENTED", "AWAITING_RENDER", "ACTIVE", "ENDED")
         .contains(state))
       throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Estado inesperado do motor.");
     return new Observation(
@@ -189,7 +193,14 @@ class MeshEngine implements RemoteEngine {
         s.path("reason").isTextual() ? s.path("reason").asText() : null,
         s.path("startedAt").isNumber() ? s.path("startedAt").asLong() : null,
         s.path("consentAt").isNumber() ? s.path("consentAt").asLong() : null,
-        s.path("endedAt").isNumber() ? s.path("endedAt").asLong() : null);
+        s.path("endedAt").isNumber() ? s.path("endedAt").asLong() : null, nativeDiagnostic(s.path("nativeDiagnostic")));
+  }
+
+  private Map<String,Object> nativeDiagnostic(JsonNode n) {
+    var result=new LinkedHashMap<String,Object>();
+    if(Set.of("REQUESTED","HELPER_CREATED","HELPER_READY","RESPONSE_ACCEPTED","RESPONSE_REJECTED").contains(n.path("stage").asText()))result.put("stage",n.path("stage").asText());
+    for(String key:List.of("targetSession","engineSession","consoleSession","helperPid","helperSession"))if(n.path(key).isInt()&&n.path(key).asInt()>=-1)result.put(key,n.path(key).asInt());
+    return result;
   }
 
   public Observation remove(String node, String shareId) {

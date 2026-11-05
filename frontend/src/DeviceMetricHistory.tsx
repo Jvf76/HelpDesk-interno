@@ -1,0 +1,8 @@
+import {useEffect,useState} from "react";
+import {api} from "./api";
+import {SeriesChart} from "./FleetOverview";
+export function DeviceMetricHistory({id}:{id:string}){
+ const [period,setPeriod]=useState("1"),[points,setPoints]=useState<Record<string,any>[]>([]),[error,setError]=useState(""),[loading,setLoading]=useState(true);
+ useEffect(()=>{let alive=true;setPoints([]);setLoading(true);const load=async()=>{try{const to=new Date(),from=new Date(+to-Number(period)*3600000);const r=await api<{points:Record<string,any>[];truncated:boolean}>(`/inventory/${id}/metrics?`+new URLSearchParams({from:from.toISOString(),to:to.toISOString()}));if(alive){setPoints(r.points);setError(r.truncated?"Limite de pontos atingido. Reduza o período.":"");}}catch(e){if(alive)setError((e as Error).message);}finally{if(alive)setLoading(false);}};void load();const interval=setInterval(()=>void load(),30000);return()=>{alive=false;clearInterval(interval);};},[id,period]);
+ return <section aria-label="Histórico de recursos"><label>Período do histórico<select value={period} onChange={e=>setPeriod(e.target.value)}>{[["0.25","15 minutos"],["1","1 hora"],["6","6 horas"],["24","24 horas"],["168","7 dias"]].map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>{error&&<p role="alert">{error}</p>}{loading?<p>Carregando histórico…</p>:<div className="mon-charts"><SeriesChart title="CPU e memória RAM" points={points} percent series={[{key:"cpu_pct",label:"CPU",color:"#ea963a"},{key:"memory_pct",label:"RAM",color:"#689cf0"}]}/><SeriesChart title="Espaço livre em disco" points={points} percent series={[{key:"disk_free_pct",label:"Menor percentual livre entre discos",color:"#27a879"}]}/></div>}</section>;
+}

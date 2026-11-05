@@ -20,6 +20,7 @@ internal sealed class InstallState
     public bool OwnsDeviceData { get; set; }
     public bool RollbackPending { get; set; }
     public bool StartupOwned { get; set; }
+    public bool CorporateService { get; set; }
 }
 internal static class Installation
 {
@@ -92,7 +93,7 @@ internal static class Installation
     {
         using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
         using var key = machine.CreateSubKey(UninstallKey);
-        key.SetValue("DisplayName", "Uai Suporte"); key.SetValue("DisplayVersion", "0.6.1");
+        key.SetValue("DisplayName", "Uai Suporte"); key.SetValue("DisplayVersion", "0.8.0");
         key.SetValue("Publisher", "Uai Telecom - LAB não assinado"); key.SetValue("InstallLocation", Root);
         key.SetValue("UninstallString", "\"" + Installer + "\" --uninstall"); key.SetValue("DisplayIcon", Installer);
         key.SetValue("NoModify", 1, RegistryValueKind.DWord); key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -119,9 +120,24 @@ internal static class Installation
             } finally {if(instance!=null)Marshal.FinalReleaseComObject(instance);Marshal.FinalReleaseComObject(shell);}
         }
     }
+    static void RemoveOwnedUserUi(string id){
+        if(!Guid.TryParseExact(id,"N",out _))throw new InvalidDataException("Identificador de instalação inválido.");
+        using var profiles=Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList");
+        if(profiles==null)return;
+        foreach(string sid in profiles.GetSubKeyNames()){
+            using var profile=profiles.OpenSubKey(sid);
+            if(profile?.GetValue("ProfileImagePath") is string folder)DeleteTree(Path.Combine(Environment.ExpandEnvironmentVariables(folder),"AppData","Local","UaiTelecom","UaiSuporte","Ui",id));
+        }
+        Log("OWNED_UI_PROFILES_REMOVED");
+    }
     public static void Install(bool configureHosts, Action<string> report)
     {
         var ownerSid=InteractiveOwner.Require();
+        if(File.Exists(StateFile)){
+            var installed=JsonSerializer.Deserialize<InstallState>(File.ReadAllText(StateFile));
+            if(installed is {Complete:true,Removed:false,RollbackPending:false}){Upgrade(installed,report);return;}
+        }
+        if(Directory.Exists(Provisioning.Storage))throw new InvalidOperationException("Dados corporativos preexistentes; use a recuperação ou atualização autorizada.");
         if(File.Exists(Path.Combine(Provisioning.Storage,"setup.bin")))throw new InvalidOperationException("Configuração local existente; conclua a remoção/recuperação anterior.");
         if(File.Exists(Path.Combine(Provisioning.Storage,"pending-enrollment.bin")))throw new InvalidOperationException("Cadastro anterior incompleto; conclua a reversão pelo desinstalador.");
         if(File.Exists(Path.Combine(Provisioning.Storage,"activation-recovery.bin")))throw new InvalidOperationException("Recuperação anterior pendente; use a remoção existente.");
@@ -179,20 +195,18 @@ internal static class Installation
             if(!Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(agentPath))).Equals(Provisioning.MeshHash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Hash do MeshAgent recusado.");
             using(var locked=new FileStream(agentPath,FileMode.Open,FileAccess.Read,FileShare.Read))Authenticode.RequireValid(agentPath);
             Log("MESH_HASH_AND_AUTHENTICODE_OK");
-            WebView(report);
+            WebView(report);CorporateInstallation.Manifest();
             state.OwnsDeviceData=true;Save(state);
             Log("DEVICE_LOCAL_PREPARATION_BEGIN");
-            Provisioning.PrepareForActivation(agentPath);
+            Provisioning.PrepareForActivation(agentPath, Log);
             Log("DEVICE_LOCAL_READY_AWAITING_ACTIVATION");
-            var startup=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup),"Uai Suporte.lnk");
-            if(File.Exists(startup))throw new InvalidOperationException("Atalho de inicialização preexistente; nada será sobrescrito.");
-            state.StartupOwned=true;Save(state);
-            Shortcut(startup,Executable);
+            state.CorporateService=true;state.StartupOwned=true;Save(state);
+            CorporateInstallation.Register();
             Directory.CreateDirectory(Menu);
             Shortcut(Path.Combine(Menu, "Uai Suporte.lnk"), Executable);
             Shortcut(Path.Combine(Menu, "Desinstalar Uai Suporte.lnk"), Installer, "--uninstall");
             Log("STARTUP_AND_SHORTCUTS_OK");
-            state.Complete = true; Save(state); Log("INSTALL_COMPLETE");
+            state.Complete = true; Save(state);CorporateInstallation.Start(); Log("INSTALL_COMPLETE");
         }
         catch(Exception original) {
             SetupAudit.Write("INSTALL_STAGE_FAILED", original);
@@ -202,6 +216,48 @@ internal static class Installation
             try{Remove(true);SetupAudit.Write("ROLLBACK_OK_REBOOT_REQUIRED");}
             catch{Log("ROLLBACK_PENDING_RECONNECT_AND_UNINSTALL");throw new InvalidOperationException("Instalação falhou e a reversão não pôde ser concluída. Nenhum motor fica iniciado. Reconecte ao servidor e use o desinstalador para revogar a identidade e concluir a limpeza. Registro: "+StateFile,original);}
             throw new InvalidOperationException("Instalação desfeita. Se houver cadastro anterior, preserve sua identidade. "+original.Message,original);
+        }
+    }
+    static void Upgrade(InstallState state,Action<string> report) {
+        if(state.Product!="UaiSuporte-LAB-0.5.0")throw new IOException("Instalação de outro produto.");
+        if(!state.CorporateService&&InteractiveOwner.Require()!=state.OwnerSid)throw new IOException("Migração exige a conta Windows que ativou o dispositivo.");
+        SafePath(Root);SafePath(Provisioning.Storage);
+        string old=App+".previous",staged=App+".next",oldInstaller=Installer+".previous";
+        if(Directory.Exists(old)||Directory.Exists(staged)||File.Exists(oldInstaller))throw new IOException("Atualização anterior pendente; preserve o registro para recuperação.");
+        var transaction=new ApplicationSwap(App);
+        bool legacy=!state.CorporateService,migrated=false,committed=false;
+        Directory.CreateDirectory(staged);
+        try {
+            report("Preparando atualização e preservando o cadastro…");
+            using(var payload=Assembly.GetExecutingAssembly().GetManifestResourceStream("app.zip")!)Policy.Extract(payload,staged);
+            if(!File.Exists(Path.Combine(staged,"Service","UaiSuporte.Service.exe")))throw new IOException("Serviço ausente do pacote.");
+            File.Copy(Installer,oldInstaller,false);
+            CorporateInstallation.Stop();CorporateInstallation.StopInterfaces();
+            if(legacy){if(Directory.Exists(DeviceStore.Root))throw new IOException("Migração anterior pendente.");migrated=true;DeviceStore.MigrateLegacy();}
+            var meshPath=DeviceStore.Read<JsonElement>("setup.bin").GetProperty("meshExe").GetString()??throw new InvalidDataException();
+            if(!Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(meshPath))).Equals(Provisioning.MeshHash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Integridade do componente interno inválida.");
+            Authenticode.RequireValid(meshPath);
+            Log("UPDATE_MESH_HASH_AND_SIGNATURE_OK");
+            state.RollbackPending=true;Save(state);Log("UPDATE_BEGIN_IDENTITY_PRESERVED");
+            transaction.Swap();
+            WebView(report);CorporateInstallation.Manifest();CorporateInstallation.Register();
+            state.CorporateService=true;state.RollbackPending=false;Save(state);CorporateInstallation.Start();
+            // Copy the matching integrated uninstaller only after the new service starts.
+            File.Copy(Environment.ProcessPath!,Installer,true);RegisterUninstaller();
+            committed=true;transaction.Commit();File.Delete(oldInstaller);RemoveOwnedUserStartup();
+            if(legacy){foreach(string file in new[]{"identity.bin","setup.bin","pending-enrollment.bin","account-registration.bin","activation-recovery.bin"})File.Delete(Path.Combine(DeviceStore.Legacy,file));DeleteTree(Path.Combine(DeviceStore.Legacy,"Mesh"));}
+            Log("UPDATE_COMPLETE_IDENTITY_PRESERVED");
+        }catch{
+            if(committed){Log("UPDATE_COMMITTED_CLEANUP_PENDING");throw new IOException("Atualização concluída; limpeza anterior pendente de revisão pela TI.");}
+            Log("UPDATE_FAILED_ROLLBACK_BEGIN");
+            try{CorporateInstallation.Stop();if(legacy)CorporateInstallation.Remove();
+                transaction.Rollback();
+                if(File.Exists(oldInstaller)){File.Copy(oldInstaller,Installer,true);File.Delete(oldInstaller);}
+                if(migrated)DeleteTree(DeviceStore.Root);
+                state.CorporateService=!legacy;state.RollbackPending=false;Save(state);
+                if(!legacy)CorporateInstallation.Start();Log("UPDATE_ROLLBACK_COMPLETE");
+            }catch{state.RollbackPending=true;Save(state);Log("UPDATE_ROLLBACK_PENDING");}
+            throw new IOException("Atualização não concluída. Cadastro preservado; consulte a TI.");
         }
     }
     public static async Task<string> CheckNetwork()
@@ -238,12 +294,14 @@ internal static class Installation
     static extern bool MoveFileEx(string existing, string? replacement, int flags);
     public static string Remove(bool removeCaConfirmed)
     {
-        CheckStopped(); SafePath(Root); SafePath(Menu);
+        SafePath(Root); SafePath(Menu);
         if (!File.Exists(StateFile)) throw new InvalidOperationException("Registro desta instalação não encontrado. Nenhum arquivo externo será removido.");
         var state = JsonSerializer.Deserialize<InstallState>(File.ReadAllText(StateFile)) ?? throw new InvalidOperationException("Registro inválido.");
         if (state.Product != "UaiSuporte-LAB-0.5.0") throw new InvalidOperationException("Registro de outro produto; remoção bloqueada.");
-        if(state.OwnerSid.Length>0&&InteractiveOwner.Require()!=state.OwnerSid)throw new InvalidOperationException("Conclua a remoção na conta Windows usada no cadastro.");
+        if(!state.CorporateService&&state.OwnerSid.Length>0&&InteractiveOwner.Require()!=state.OwnerSid)throw new InvalidOperationException("Conclua a remoção na conta Windows usada no cadastro.");
         Log("UNINSTALL_BEGIN");
+        if(!state.CorporateService&&!state.RollbackPending&&File.Exists(Path.Combine(DeviceStore.Legacy,"identity.bin")))throw new IOException("Use o desinstalador original para cadastro legado ou conclua a atualização autorizada primeiro.");
+        if(state.CorporateService){CorporateInstallation.Stop();CorporateInstallation.StopInterfaces();}else CheckStopped();
         // Revoke before deleting the only local credential. Offline failure leaves an explicit retryable journal.
         if(state.OwnsDeviceData){Provisioning.Revoke().GetAwaiter().GetResult();Log("DEVICE_REVOCATION_CONFIRMED");}
 
@@ -257,7 +315,9 @@ internal static class Installation
             state.HostsBlock = ""; Save(state); Log("HOSTS_OWN_BLOCK_REMOVED");
         }
         if(!state.RollbackPending||state.StartupOwned)RemoveOwnedUserStartup();
+        if(state.CorporateService)CorporateInstallation.Remove();
         DeleteTree(App);
+        if(state.CorporateService)RemoveOwnedUserUi(state.Id);
         if(state.OwnsDeviceData){
             SafePath(Provisioning.Storage);
             if(state.RollbackPending){

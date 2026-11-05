@@ -37,8 +37,7 @@ public sealed class ApiSession : IDisposable
         };
     }
     public static bool AllowedDevice(string method,string path) =>
-        method=="GET" && Regex.IsMatch(path,@"^/(identity|connections|sessions/[0-9a-fA-F-]{36})$") ||
-        method=="POST" && Regex.IsMatch(path,@"^/(connections|sessions/[0-9a-fA-F-]{36}/(stop|launch))$");
+        method=="GET" && (path=="/identity" || path=="/connections");
     public async Task<ApiReply> Send(string source, string path, string method, string? body, string? csrf)
     {
         if (!TrustedSource(source) || !(device==null?Allowed(method,path):AllowedDevice(method,path)) || (body?.Length ?? 0)>131072)

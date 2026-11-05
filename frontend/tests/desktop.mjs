@@ -27,7 +27,7 @@ try {
   });
   await page.goto('https://uai-suporte.invalid/index.html');
   if(mode==='activated')await page.getByRole('heading',{name:'Seu código',exact:true}).waitFor();
-  else {
+  else if(mode!=='tls'&&mode!=='offline') {
    await page.getByLabel('Token de ativação',{exact:true}).waitFor();
    if(mode==='new') {
     await page.getByLabel('Token de ativação',{exact:true}).fill('test-only-token');
@@ -36,10 +36,15 @@ try {
    }
    if(mode==='tls'||mode==='offline'){await page.getByRole('alert').waitFor();checks++;}
   }
+  if(mode==='tls'||mode==='offline'){await page.getByRole('alert').waitFor();assert.equal(await page.getByLabel('Token de ativação',{exact:true}).count(),0);checks++;}
   assert.equal(await page.getByLabel('Login',{exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:'Sair',exact:true}).count(),0);
   assert.equal(calls.some(p=>p.startsWith('/auth/')),false);
   assert.equal(await page.getByText('Sessão expirada. Entre novamente.',{exact:true}).count(),0);checks+=4;
+  assert.equal(await page.getByRole('heading',{name:'Conectar a outro computador',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Conectar',exact:true}).count(),0);checks+=2;
+  if(mode==='activated'){await page.getByRole('button',{name:'Manter na bandeja'}).click();assert(calls.includes('/desktop/background'));checks++;}
+
   await page.close();
  }
  console.log(`${checks} verificações do aplicativo sem login (ponte simulada) passaram.`);

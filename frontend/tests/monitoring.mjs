@@ -2,9 +2,10 @@
 import { chromium } from 'playwright';import fs from 'node:fs/promises';import path from 'node:path';import assert from 'node:assert/strict';
 const browser=await chromium.launch({headless:true});let checks=0;
 try{for(const role of ['ADMIN','LEITURA']){
- const page=await browser.newPage({viewport:{width:1200,height:832}});const calls=[];const browserErrors=[];page.on('pageerror',e=>browserErrors.push(e.message));let responsible='Pessoa TESTE';
+ const page=await browser.newPage({viewport:{width:1200,height:832}});const calls=[];const browserErrors=[];page.on('pageerror',e=>browserErrors.push(e.message));let responsible='Pessoa TESTE';let sessionPhase='PENDING',launches=0,releaseLaunch;
  const device={id:'11111111-1111-4111-8111-111111111111',public_code:'TEST00000001',name:'WINDOWS-TESTE',friendly_name:'Computador TESTE',responsible,city:'Cidade TESTE',department:'LAB',os:'Windows TESTE',online:true,revoked:false,state:'ONLINE',alerts:[],last_seen:new Date().toISOString(),cpu_pct:30,memory_pct:40,disk_free_pct:50,app_version:'teste',agent_version:'teste'};
  await page.route('**/*',async route=>{const url=new URL(route.request().url());assert.equal(url.origin,'https://support.test');
+  if(url.pathname==='/remote-viewer/index.html'){await route.fulfill({contentType:'text/html',body:'<html><body>Controlador simulado</body></html>'});return;}
   if(!url.pathname.startsWith('/api/')){const f=path.join(path.resolve('dist'),url.pathname==='/'?'index.html':url.pathname);await route.fulfill({body:await fs.readFile(f),contentType:f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.png')?'image/png':'text/html'});return;}
   calls.push(url.pathname+url.search);let body={};const method=route.request().method();
   if(url.pathname==='/api/auth/me')body={id:'me',name:'Usuário TESTE',role,csrf:'test-csrf'};
@@ -12,10 +13,15 @@ try{for(const role of ['ADMIN','LEITURA']){
   else if(url.pathname==='/api/monitoring/summary')body={counts:[{state:'ONLINE',count:1},{state:'OFFLINE',count:25}],totals:{total:26,alerts:0,silent:0},versions:[{version:'teste',count:26}]};
   else if(url.pathname==='/api/inventory/'+device.id&&method==='PUT'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');responsible=route.request().postDataJSON().responsible;}
   else if(url.pathname==='/api/inventory/'+device.id)body={device:{...device,responsible,windows_user:'WINDOWS/user'},latest:[],changes:[],connections:[],events:[],canConnect:role==='ADMIN'};
+  else if(url.pathname==='/api/inventory/'+device.id+'/metrics')body={points:[{observed_at:new Date().toISOString(),cpu_pct:30,memory_pct:40,disk_free_pct:50}],resolution:'sample',truncated:false};
   else if(url.pathname==='/api/monitoring/series')body={points:Array.from({length:6},(_,i)=>({observed_at:new Date(Date.now()-(5-i)*600000).toISOString(),online:1+i,offline:25-i,cpu_pct:20+i*4,memory_pct:45+i*2})),resolution:'sample',truncated:false};
   else if(url.pathname==='/api/activation-tokens'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');assert.equal(route.request().postDataJSON().recoverDeviceId,device.id);body={id:'test-token',token:'TEST-FIXTURE-NOT-A-REAL-TOKEN'};}
 
-  else if(url.pathname==='/api/users'||url.pathname.endsWith('/permissions'))body=[];
+  else if(url.pathname==='/api/connections'&&method==='POST'){assert.equal(role,'ADMIN');assert.deepEqual(route.request().postDataJSON(),{code:device.public_code,mode:'CONTROL'});body={id:'test-session',status:'PENDING',mode:'CONTROL'};}
+  else if(url.pathname==='/api/sessions/test-session/stop')body={id:'test-session',status:'ENDED',ended_at:new Date().toISOString()};
+  else if(url.pathname==='/api/sessions/test-session/launch'){launches++;assert.equal(sessionPhase,'CONSENTED');sessionPhase='READY';if(launches===2)await new Promise(resolve=>releaseLaunch=resolve);body={authCookie:'fixture-only',viewOnly:false,expiresAt:Date.now()+60000};}
+  else if(url.pathname==='/api/sessions/test-session')body={id:'test-session',status:sessionPhase,mode:'CONTROL'};
+  else if(url.pathname==='/api/users' ||url.pathname.endsWith('/permissions'))body=[];
   else throw new Error('Unexpected endpoint '+url.pathname);
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
  });
@@ -48,7 +54,29 @@ try{for(const role of ['ADMIN','LEITURA']){
  await page.getByRole('button',{name:'Próxima',exact:true}).click();await page.getByText('Página 2 · 26 computadores').waitFor();checks++;
  await page.getByRole('button',{name:device.public_code,exact:true}).click();await page.getByRole('heading',{name:'Identificação e dados detectados',exact:true}).waitFor();checks++;
  await page.getByText('WINDOWS/user',{exact:true}).waitFor();checks++;
- if(role==='ADMIN'){await page.getByLabel('Colaborador responsável',{exact:true}).fill('Outra pessoa TESTE');await page.getByRole('button',{name:'Salvar dados administrativos',exact:true}).click();await page.getByRole('status').filter({hasText:'Código público preservado'}).waitFor();assert.equal(responsible,'Outra pessoa TESTE');checks++;}
+ await page.getByRole('img',{name:'CPU e memória RAM',exact:true}).waitFor();await page.getByRole('img',{name:'Espaço livre em disco',exact:true}).waitFor();assert(calls.some(x=>x.startsWith('/api/inventory/'+device.id+'/metrics?')));checks+=3;
+ if(role==='ADMIN'){
+ await page.getByRole('button',{name:'Conectar',exact:true}).click();
+ const card=page.getByRole('heading',{name:'Atendimento remoto · '+device.public_code}).locator('..');
+ assert.equal(await card.getByRole('combobox').count(),0);
+ assert.equal(await card.getByRole('button',{name:'Solicitar consentimento'}).count(),0);
+ await card.getByRole('button',{name:'Conectar',exact:true}).click();
+ await card.getByText('Aguardando consentimento no computador acessado',{exact:true}).waitFor();
+ assert.equal(launches,0);sessionPhase='CONSENTED';
+ await page.getByTitle('Atendimento remoto').waitFor();assert.equal(launches,1);
+ assert.equal(await page.getByRole('button',{name:'Abrir visualizador',exact:true}).count(),0);
+ await page.waitForTimeout(2200);assert.equal(launches,1);
+ await card.getByRole('button',{name:'Encerrar acesso',exact:true}).click();
+ await page.getByTitle('Atendimento remoto').waitFor({state:'detached'});
+ await card.getByRole('button',{name:'Fechar atendimento'}).click();checks+=8;
+ // A late bootstrap must not reopen a viewer after local requester stop.
+ sessionPhase='CONSENTED';await page.getByRole('button',{name:'Conectar',exact:true}).click();
+ await card.getByRole('button',{name:'Conectar',exact:true}).click();await page.waitForTimeout(2500);
+ assert.equal(launches,2);assert(releaseLaunch);
+ await card.getByRole('button',{name:'Encerrar acesso',exact:true}).click();releaseLaunch();
+ await page.waitForTimeout(200);assert.equal(await page.getByTitle('Atendimento remoto').count(),0);
+ await card.getByRole('button',{name:'Fechar atendimento'}).click();checks+=3;
+ await page.getByLabel('Colaborador responsável' ,{exact:true}).fill('Outra pessoa TESTE');await page.getByRole('button',{name:'Salvar dados administrativos',exact:true}).click();await page.getByRole('status').filter({hasText:'Código público preservado'}).waitFor();assert.equal(responsible,'Outra pessoa TESTE');checks++;}
  else{assert.equal(await page.getByRole('button',{name:'Salvar dados administrativos',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Revogar dispositivo',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Conectar',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Usuários',exact:true}).count(),0);checks+=4;}
  await page.getByRole('button',{name:'Visão geral',exact:true}).click();
  await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();

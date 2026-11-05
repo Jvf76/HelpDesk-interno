@@ -61,10 +61,11 @@ if(args.Length>0 && (args[0]=="live"||args[0]=="untrusted")) {
 }
 Check(!ApiSession.AllowedDevice("POST","/auth/login"),"device bridge excludes user login");
 Check(!ApiSession.AllowedDevice("POST","/users"),"device bridge excludes admin");
-Check(ApiSession.AllowedDevice("POST","/connections"),"device connection route allowed");
+Check(!ApiSession.AllowedDevice("POST","/connections"),"receive-only device cannot initiate connection");
+Check(!ApiSession.AllowedDevice("POST","/sessions/00000000-0000-0000-0000-000000000001/launch"),"receive-only device cannot open viewer");
 using(var deviceApi=new ApiSession(new DeviceStub(),()=> ("device-test","private-test"))) {
  Check((await deviceApi.Send(origin,"/identity","GET",null,null)).Status==200,"device startup authenticates without user login");
- Check((await deviceApi.Send(origin,"/connections","POST","{}",null)).Status==200,"device request does not depend on user CSRF cookie");
+ Check((await deviceApi.Send(origin,"/connections","POST","{}",null)).Status==403,"device connection blocked before contacting API");
  Check((await deviceApi.Send(origin,"/auth/login","POST","{}",null)).Status==403,"native login forbidden");
 }
 using(var unactivated=new ApiSession(new DeviceStub(),()=>null)) Check((await unactivated.Send(origin,"/identity","GET",null,null)).Status==401,"unactivated device does not contact API");

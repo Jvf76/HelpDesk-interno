@@ -16,7 +16,7 @@ internal static class StartupRegistration
             if(File.Exists(path) && !string.Equals(Path.GetFullPath((string)shortcut.TargetPath),Path.GetFullPath(executable),StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Já existe outro atalho de inicialização Uai Suporte. A TI deve revisar antes de substituir.");
             shortcut.TargetPath=executable;
-            shortcut.Arguments="";
+            shortcut.Arguments="--background";
             shortcut.WorkingDirectory=Path.GetDirectoryName(executable);
             shortcut.Description="Uai Suporte visível: consentimento e encerramento local";
             shortcut.Save();

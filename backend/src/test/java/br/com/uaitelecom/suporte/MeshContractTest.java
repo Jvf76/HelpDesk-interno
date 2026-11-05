@@ -24,7 +24,7 @@ class MeshContractTest {
     com.fasterxml.jackson.databind.JsonNode command(Map<String, Object> data) {
       if ("uaiSessionCapabilities".equals(data.get("action")))
         return json.createObjectNode()
-            .put("version", 1)
+            .put("version", 3).put("renderAck",true).put("activeSeconds",60).put("setupSeconds",120)
             .put("relayTelemetry", true)
             .put("oneConnection", true)
             .put("leaseSeconds", 12);
@@ -50,7 +50,7 @@ class MeshContractTest {
     engine.create("node//test", "Técnico", true);
     assertEquals(2, engine.request.get("p"));
     assertEquals(72, engine.request.get("consent"));
-    assertEquals(1, engine.request.get("expire"));
+    assertEquals(3, engine.request.get("expire"));
     assertEquals(true, engine.request.get("viewOnly"));
   }
 

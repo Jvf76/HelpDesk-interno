@@ -71,6 +71,12 @@ class Security {
             s.setHeader("Cache-Control", "no-store");
             s.setHeader("Referrer-Policy", "no-referrer");
             String path = r.getRequestURI();
+            if(path.equals("/api/agent/presence")&&r.getMethod().equals("POST")){
+              if(r.getContentLengthLong()>PresenceBody.LIMIT){s.sendError(413);return;}
+              byte[] bytes=r.getInputStream().readNBytes(PresenceBody.LIMIT+1);
+              if(bytes.length>PresenceBody.LIMIT){s.sendError(413);return;}
+              r=new PresenceBody(r,bytes);
+            }
             if (path.equals("/api/auth/login")
                 || path.startsWith("/api/agent/")
                 || path.equals("/error")) {

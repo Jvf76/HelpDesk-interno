@@ -460,44 +460,49 @@ class CriticalFlowsTest {
       .andExpect(status().isUnauthorized());
   }
 
-  @Test void ordinaryUserCanRequestButCannotLaunchWithoutConsent() throws Exception {
-    var result = result(mvc.perform(req("POST", "/api/connections", bobAccount,
+  @Test void panelOperatorCannotLaunchWithoutConsent() throws Exception {
+    grant(true);
+    var result = result(mvc.perform(req("POST", "/api/connections", techAccount,
         Map.of("code",device.toString(),"mode","CONTROL"))).andExpect(status().isOk()));
     var id=UUID.fromString(result.get("id").asText());
     assertEquals("PENDING",result.get("status").asText());
     assertTrue(result.get("consent_only").asBoolean());
-    assertEquals("bob",service.forDevice(device).getFirst().get("technician"));
-    assertThrows(Exception.class,()->service.launch(bobAccount.actor(),id));
+    assertEquals("tech",service.forDevice(device).getFirst().get("technician"));
+    assertThrows(Exception.class,()->service.launch(techAccount.actor(),id));
     verify(engine,never()).create(anyString(),anyString(),anyBoolean());
     service.decide(device,id,"accept-view");
-    service.launch(bobAccount.actor(),id);
+    service.launch(techAccount.actor(),id);
     verify(engine).create(anyString(),anyString(),eq(true));
   }
   @Test void assistedRejectionNeverCreatesTransport() {
-    var id=Db.id(service.requestAssisted(bobAccount.actor(),device.toString(),"CONTROL","test-ip"),"id");
+    grant(true);
+    var id=Db.id(service.requestAssisted(techAccount.actor(),device.toString(),"CONTROL","test-ip"),"id");
     service.decide(device,id,"reject");
-    assertThrows(Exception.class,()->service.launch(bobAccount.actor(),id));
+    assertThrows(Exception.class,()->service.launch(techAccount.actor(),id));
     verify(engine,never()).create(anyString(),anyString(),anyBoolean());
-    assertEquals("REJECTED",service.get(bobAccount.actor(),id).get("result"));
+    assertEquals("REJECTED",service.get(techAccount.actor(),id).get("result"));
   }
   @Test void assistedSessionStillRejectsRevokedUserAndLocalStop() {
-    var id=Db.id(service.requestAssisted(bobAccount.actor(),device.toString(),"VIEW","test-ip"),"id");
+    grant(true);
+    var id=Db.id(service.requestAssisted(techAccount.actor(),device.toString(),"VIEW","test-ip"),"id");
     service.decide(device,id,"stop");
-    assertEquals("LOCAL_STOP",service.get(bobAccount.actor(),id).get("result"));
-    id=Db.id(service.requestAssisted(bobAccount.actor(),device.toString(),"VIEW","test-ip"),"id");
-    db.exec("UPDATE app_user SET active=FALSE WHERE id=?",bob);service.sweep();
-    assertEquals("ENDED",service.get(bobAccount.actor(),id).get("status"));
+    assertEquals("LOCAL_STOP",service.get(techAccount.actor(),id).get("result"));
+    id=Db.id(service.requestAssisted(techAccount.actor(),device.toString(),"VIEW","test-ip"),"id");
+    db.exec("UPDATE app_user SET active=FALSE WHERE id=?",tech);service.sweep();
+    assertEquals("ENDED",service.get(techAccount.actor(),id).get("status"));
   }
   @Test void assistedSessionHistoryAndStopArePrivate() throws Exception {
-    var id=Db.id(service.requestAssisted(bobAccount.actor(),device.toString(),"VIEW","test-ip"),"id");
+    grant(true);
+    var id=Db.id(service.requestAssisted(techAccount.actor(),device.toString(),"VIEW","test-ip"),"id");
     assertThrows(Exception.class,()->service.stop(aliceAccount.actor(),id));
     assertEquals(0,result(mvc.perform(req("GET","/api/connections",aliceAccount,null)).andExpect(status().isOk())).size());
-    assertEquals(1,result(mvc.perform(req("GET","/api/connections",bobAccount,null)).andExpect(status().isOk())).size());
+    assertEquals(1,result(mvc.perform(req("GET","/api/connections",techAccount,null)).andExpect(status().isOk())).size());
   }
   @Test void codeGuessingIsRateLimitedAndNeedsAuthentication() throws Exception {
+    grant(true);
     mvc.perform(post("/api/connections").contentType("application/json").content("{\"code\":\"x\",\"mode\":\"VIEW\"}")).andExpect(status().isUnauthorized());
-    for(int i=0;i<5;i++) mvc.perform(req("POST","/api/connections",bobAccount,Map.of("code","invalid","mode","VIEW"))).andExpect(status().isNotFound());
-    mvc.perform(req("POST","/api/connections",bobAccount,Map.of("code",device.toString(),"mode","VIEW"))).andExpect(status().isTooManyRequests());
+    for(int i=0;i<5;i++) mvc.perform(req("POST","/api/connections",techAccount,Map.of("code","invalid","mode","VIEW"))).andExpect(status().isNotFound());
+    mvc.perform(req("POST","/api/connections",techAccount,Map.of("code",device.toString(),"mode","VIEW"))).andExpect(status().isTooManyRequests());
     verify(engine,never()).create(anyString(),anyString(),anyBoolean());
   }
 
@@ -630,7 +635,7 @@ class CriticalFlowsTest {
     mvc.perform(post("/api/activation-tokens").cookie(adminAccount.cookie()).contentType("application/json").content("{\"lifetimeSeconds\":300}")).andExpect(status().isForbidden());
     mvc.perform(req("POST","/api/activation-tokens",adminAccount,Map.of("lifetimeSeconds",86400))).andExpect(status().isBadRequest());
   }
-  @Test void concurrentTokenConsumptionHasOnlyOneWinner() throws Exception {
+  @RepeatedTest(5) void concurrentTokenConsumptionHasOnlyOneWinner() throws Exception {
     String token=activationToken();
     var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
     var barrier=new java.util.concurrent.CyclicBarrier(2);
@@ -649,16 +654,17 @@ class CriticalFlowsTest {
     db.exec("UPDATE device SET revoked=TRUE WHERE id=?",device);
     mvc.perform(get("/api/desktop/identity").header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device)).andExpect(status().isUnauthorized());
   }
-  @Test void deviceRequestsRequireConsentAndStopOnRequesterRevocation() throws Exception {
-    UUID target=UUID.randomUUID();db.exec("INSERT INTO device(id,name,location,department,public_code,agent_hash,mesh_node,last_seen) VALUES (?,'Target','LAB','LAB','ABCD12345678',?,'node//target',?)",target,Security.hash("target-agent"),OffsetDateTime.now());
-    var request=post("/api/desktop/connections").header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device).contentType("application/json").content("{\"code\":\"ABCD 1234 5678\",\"mode\":\"CONTROL\",\"windowsUser\":\"LAB/test\"}");
-    var session=result(mvc.perform(request).andExpect(status().isOk()));UUID id=UUID.fromString(session.get("id").asText());
-    mvc.perform(post("/api/desktop/sessions/"+id+"/launch").header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device)).andExpect(status().isForbidden());
+  @Test void receiveOnlyDeviceCannotRequestOrLaunchAndOrdinaryWebUserIsDenied() throws Exception {
+    mvc.perform(post("/api/desktop/connections").header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device).contentType("application/json").content("{\"code\":\"ABCD12345678\",\"mode\":\"CONTROL\"}")).andExpect(status().isForbidden());
+    mvc.perform(post("/api/desktop/sessions/"+UUID.randomUUID()+"/launch").header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device)).andExpect(status().isForbidden());
+    mvc.perform(req("POST","/api/connections",bobAccount,Map.of("code",device.toString(),"mode","VIEW"))).andExpect(status().isForbidden());
+    assertFalse(db.exists("SELECT 1 FROM remote_session"));
     verify(engine,never()).create(anyString(),anyString(),anyBoolean());
-    assertEquals(device,Db.id(db.one("SELECT * FROM remote_session WHERE id=?",id),"requester_device_id"));
-    service.decide(target,id,"accept-view");assertEquals("VIEW",db.one("SELECT mode FROM remote_session WHERE id=?",id).get("mode"));
-    db.exec("UPDATE device SET revoked=TRUE WHERE id=?",device);service.sweep();
-    assertNotNull(db.one("SELECT ended_at FROM remote_session WHERE id=?",id).get("ended_at"));
+  }
+  @Test void receiveOnlyHistoryContainsIncomingSessionsOnly() throws Exception {
+    var id=request(adminAccount,"VIEW");
+    var history=result(mvc.perform(get("/api/desktop/connections").header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device)).andExpect(status().isOk()));
+    assertEquals(1,history.size());assertEquals(id.toString(),history.get(0).get("id").asText());
   }
   @Test void activatedCredentialRevocationCannotBeUndoneByReplayingToken() throws Exception {
     String token=activationToken(),credential=Security.token();UUID installation=UUID.randomUUID();
@@ -730,6 +736,35 @@ class CriticalFlowsTest {
     grant(true);var remote=result(mvc.perform(req("POST","/api/connections",techAccount,Map.of("code",device.toString(),"mode","CONTROL"))).andExpect(status().isOk()));
     db.exec("DELETE FROM device_permission WHERE user_id=?",tech);service.sweep();assertNotNull(db.one("SELECT ended_at FROM remote_session WHERE id=?",UUID.fromString(remote.get("id").asText())).get("ended_at"));
   }
+  @Test void corporatePresenceCannotSelectAnotherDeviceAndChecksTime() throws Exception {
+    db.exec("UPDATE device SET last_seen=? WHERE id=?",OffsetDateTime.now().minusSeconds(60),device);
+    var payload=new java.util.HashMap<String,Object>(report(20));payload.put("deviceId",UUID.randomUUID().toString());
+    mvc.perform(post("/api/agent/presence").header("Authorization","Bearer test-agent-identity").contentType("application/json").content(json.writeValueAsString(payload))).andExpect(status().isBadRequest());
+    payload.remove("deviceId");
+    for(var time:List.of(OffsetDateTime.now().plusMinutes(2),OffsetDateTime.now().minusMinutes(10))){payload.put("observedAt",time.toString());mvc.perform(post("/api/agent/presence").header("Authorization","Bearer test-agent-identity").contentType("application/json").content(json.writeValueAsString(payload))).andExpect(status().isForbidden());}
+    payload.put("observedAt",OffsetDateTime.now().toString());payload.put("serviceState","RUNNING");payload.put("health","STOPPED");
+    mvc.perform(post("/api/agent/presence").header("Authorization","Bearer test-agent-identity").contentType("application/json").content(json.writeValueAsString(payload))).andExpect(status().isOk());
+    assertEquals("RUNNING",db.one("SELECT service_state FROM device WHERE id=?",device).get("service_state"));
+    mvc.perform(req("POST","/api/connections",adminAccount,Map.of("code",device.toString(),"mode","VIEW"))).andExpect(status().isNotFound());
+  }
+  @Test void stoppingInterfaceAccessPreservesCorporatePresence() throws Exception {
+    grant(true);var remote=result(mvc.perform(req("POST","/api/connections",techAccount,Map.of("code",device.toString(),"mode","VIEW"))).andExpect(status().isOk()));
+    var before=db.one("SELECT last_seen FROM device WHERE id=?",device).get("last_seen");
+    mvc.perform(post("/api/agent/stop-access").header("Authorization","Bearer test-agent-identity").contentType("application/json").content("{\"reason\":\"PRESENTER_LOST\"}")).andExpect(status().isOk());
+    assertEquals(before,db.one("SELECT last_seen FROM device WHERE id=?",device).get("last_seen"));
+    assertEquals("PRESENTER_LOST",db.one("SELECT result FROM remote_session WHERE id=?",UUID.fromString(remote.get("id").asText())).get("result"));
+    mvc.perform(post("/api/agent/stop-access").header("Authorization","Bearer wrong-device").contentType("application/json").content("{\"reason\":\"LOCAL_STOP\"}")).andExpect(status().isUnauthorized());
+  }
+  @Test void corporatePresenceRejectsHugePayload() throws Exception {
+    mvc.perform(post("/api/agent/presence").header("Authorization","Bearer test-agent-identity").contentType("application/json").content("{\"machineName\":\""+"x".repeat(40000)+"\"}")).andExpect(status().isPayloadTooLarge());
+  }
+  @Test void corporateMetricsRejectInvalidCpuAndMemory() throws Exception {
+    db.exec("UPDATE device SET last_seen=? WHERE id=?",OffsetDateTime.now().minusSeconds(60),device);
+    for(double cpu:new double[]{-1,101})mvc.perform(post("/api/agent/presence").header("Authorization","Bearer test-agent-identity").contentType("application/json").content(json.writeValueAsString(report(cpu)))).andExpect(status().isBadRequest());
+    var payload=new java.util.HashMap<String,Object>(report(20));
+    payload.put("metrics",Map.of("cpuPercent",20,"memoryTotal",100,"memoryAvailable",101,"disks",List.of()));
+    mvc.perform(post("/api/agent/presence").header("Authorization","Bearer test-agent-identity").contentType("application/json").content(json.writeValueAsString(payload))).andExpect(status().isForbidden());
+  }
   @Test void metricsRevocationAndPresenceRateLimit() throws Exception {
     sample(95);
     mvc.perform(post("/api/agent/presence").header("Authorization","Bearer test-agent-identity").contentType("application/json").content(json.writeValueAsString(report(95)))).andExpect(status().isTooManyRequests());
@@ -783,4 +818,107 @@ class CriticalFlowsTest {
     assertEquals(activated.get("code").asText(),observed.at("/device/public_code").asText());assertEquals("ONLINE",observed.at("/device/state").asText());assertEquals(20,observed.at("/latest/0/cpu_pct").asInt());
     mvc.perform(activation(token,installation,credential)).andExpect(status().isOk());assertEquals(2,db.list("SELECT id FROM device").size());
   }
+
+  @Test void lifecycleViewAcceptanceAndTraceAreSeparateFromConnection() {
+    UUID id=request(adminAccount,"CONTROL");service.forDevice(device);
+    assertEquals("CONSENT_PENDING",service.get(adminAccount.actor(),id).get("phase"));
+    service.decide(device,id,"accept-view");
+    assertEquals("CONSENT_ACCEPTED_VIEW",service.get(adminAccount.actor(),id).get("phase"));
+    service.launch(adminAccount.actor(),id);verify(engine).create(anyString(),anyString(),eq(true));
+    assertEquals("TRANSPORT_CONNECTING",service.get(adminAccount.actor(),id).get("phase"));
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("CONSENTED",null,null,1L));service.sweep();
+    assertEquals("AWAITING_FIRST_FRAME",service.get(adminAccount.actor(),id).get("phase"));
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("ACTIVE",null,System.currentTimeMillis(),System.currentTimeMillis()-1));service.sweep();
+    assertEquals("VIEWING",service.get(adminAccount.actor(),id).get("phase"));
+    var trace=service.trace(adminAccount.actor(),id);assertTrue(trace.stream().anyMatch(x->"FIRST_FRAME_RECEIVED".equals(x.get("next_state"))));
+    assertTrue(trace.stream().allMatch(x->((Number)x.get("elapsed_ms")).longValue()>=0));
+    assertFalse(trace.toString().contains("test-share"));assertFalse(trace.toString().contains(adminAccount.hash()));
+    assertThrows(Exception.class,()->service.trace(aliceAccount.actor(),id));
+  }
+  @Test void lifecycleControlDuplicateAndOutOfOrder() {
+    UUID id=request(adminAccount,"CONTROL");service.decide(device,id,"accept");service.launch(adminAccount.actor(),id);
+    assertThrows(Exception.class,()->service.phase(id,"CONTROLLING","TEST",null));
+    var before=service.get(adminAccount.actor(),id).get("phase_deadline");
+    service.phase(id,"TRANSPORT_CONNECTING","TEST",null);
+    assertEquals(before,service.get(adminAccount.actor(),id).get("phase_deadline"));
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("ACTIVE",null,System.currentTimeMillis(),System.currentTimeMillis()-1));service.sweep();
+    assertEquals("CONTROLLING",service.get(adminAccount.actor(),id).get("phase"));
+    service.stop(adminAccount.actor(),id);
+    assertEquals("TERMINATED",service.get(adminAccount.actor(),id).get("phase"));
+    assertThrows(Exception.class,()->service.phase(id,"CONTROLLING","TEST",null));
+    assertThrows(Exception.class,()->service.launch(adminAccount.actor(),id));
+  }
+  @Test void refusalAndConsentExpiryCannotLaunch() {
+    UUID id=request(adminAccount,"VIEW");service.decide(device,id,"reject");
+    assertEquals("CONSENT_REJECTED",service.get(adminAccount.actor(),id).get("phase"));
+    assertThrows(Exception.class,()->service.launch(adminAccount.actor(),id));
+    UUID next=request(adminAccount,"VIEW");db.exec("UPDATE remote_session SET expires_at=? WHERE id=?",OffsetDateTime.now().minusSeconds(1),next);service.sweep();
+    assertEquals("EXPIRED",service.get(adminAccount.actor(),next).get("phase"));
+    assertThrows(Exception.class,()->service.decide(device,next,"accept"));
+  }
+  @Test void engineRejectionAndEverySetupDeadlineFailClosed() {
+    UUID id=request(adminAccount,"VIEW");service.decide(device,id,"accept");
+    when(engine.create(anyString(),anyString(),anyBoolean())).thenThrow(new IllegalStateException("do-not-expose"));
+    assertThrows(Exception.class,()->service.launch(adminAccount.actor(),id));
+    assertEquals("FAILED",service.get(adminAccount.actor(),id).get("phase"));
+    assertFalse(service.trace(adminAccount.actor(),id).toString().contains("do-not-expose"));
+    doReturn(new RemoteEngine.Share("test-share","test")).when(engine).create(anyString(),anyString(),anyBoolean());
+    for(String observation:List.of("READY","AWAITING_CONSENT","CONSENTED","AWAITING_RENDER")) {
+      UUID next=request(adminAccount,"CONTROL");service.decide(device,next,"accept");service.launch(adminAccount.actor(),next);
+      when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation(observation,null,null,observation.equals("CONSENTED")?1L:null));service.sweep();
+      db.exec("UPDATE remote_session SET phase_deadline=? WHERE id=?",OffsetDateTime.now().minusSeconds(1),next);service.sweep();
+      assertEquals("FAILED",service.get(adminAccount.actor(),next).get("phase"));
+      assertThrows(Exception.class,()->service.launch(adminAccount.actor(),next));
+    }
+  }
+  @Test void revokedAndExpiredActiveAttemptsNeverResume() {
+    UUID id=request(adminAccount,"CONTROL");service.decide(device,id,"accept");service.launch(adminAccount.actor(),id);
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("ACTIVE",null,System.currentTimeMillis(),System.currentTimeMillis()-1));service.sweep();
+    db.exec("UPDATE device SET revoked=TRUE WHERE id=?",device);service.sweep();
+    assertEquals("REVOKED",service.get(adminAccount.actor(),id).get("phase"));
+    db.exec("UPDATE device SET revoked=FALSE WHERE id=?",device);
+    assertThrows(Exception.class,()->service.launch(adminAccount.actor(),id));
+    UUID next=request(adminAccount,"VIEW");service.decide(device,next,"accept");service.launch(adminAccount.actor(),next);service.sweep();
+    db.exec("UPDATE remote_session SET expires_at=? WHERE id=?",OffsetDateTime.now().minusSeconds(1),next);service.sweep();
+    assertEquals("EXPIRED",service.get(adminAccount.actor(),next).get("phase"));
+  }
+  @Test void unconfirmedStopHasDeadlineAndDoesNotRenewAuthorization() {
+    UUID id=request(adminAccount,"CONTROL");service.decide(device,id,"accept");service.launch(adminAccount.actor(),id);
+    when(engine.remove(anyString(),anyString())).thenThrow(new IllegalStateException());
+    service.decide(device,id,"stop");clearInvocations(engine);assertEquals("ENGINE_STOPPING",service.get(adminAccount.actor(),id).get("phase"));
+    assertFalse(service.valid(db.one("SELECT * FROM remote_session WHERE id=?",id)));
+    db.exec("UPDATE remote_session SET phase_deadline=? WHERE id=?",OffsetDateTime.now().minusSeconds(1),id);service.sweep();
+    assertEquals("FAILED",service.get(adminAccount.actor(),id).get("phase"));
+    assertEquals("EXPIRED_UNCONFIRMED",service.get(adminAccount.actor(),id).get("result"));
+    verify(engine,never()).observe(anyString(),eq(true),anyBoolean());
+  }
+  @Test void activeBudgetStartsOnceAfterSetupAndSurvivesDuplicates() {
+    UUID id=request(adminAccount,"VIEW");service.decide(device,id,"accept-view");service.launch(adminAccount.actor(),id);
+    assertNull(db.one("SELECT * FROM remote_session WHERE id=?",id).get("active_until"));
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("AWAITING_CONSENT",null,null,null));service.sweep();
+    assertNull(db.one("SELECT * FROM remote_session WHERE id=?",id).get("active_until"));
+    long started=System.currentTimeMillis();
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("ACTIVE",null,started,started-25000));service.sweep();
+    var row=db.one("SELECT * FROM remote_session WHERE id=?",id);
+    assertEquals(Instant.ofEpochMilli(started).plusSeconds(60),Db.instant(row.get("active_until")));
+    assertEquals(row.get("active_until"),row.get("expires_at"));
+    assertEquals("VIEWING",row.get("phase"));
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("ACTIVE",null,started+20000,started));service.sweep();
+    assertEquals(row.get("active_until"),db.one("SELECT * FROM remote_session WHERE id=?",id).get("active_until"));
+    service.stop(adminAccount.actor(),id);service.sweep();
+    assertEquals("TERMINATED",service.get(adminAccount.actor(),id).get("phase"));
+    assertEquals(row.get("active_until"),db.one("SELECT * FROM remote_session WHERE id=?",id).get("active_until"));
+  }
+
+  @Test void nativeConsentDeadlineExplainsFailureWithoutClaimingImage() {
+    UUID id=request(adminAccount,"CONTROL");service.decide(device,id,"accept");service.launch(adminAccount.actor(),id);
+    when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("AWAITING_CONSENT",null,null,null));service.sweep();
+    assertEquals("ENGINE_CONSENT_PENDING",service.get(adminAccount.actor(),id).get("phase"));
+    db.exec("UPDATE remote_session SET phase_deadline=? WHERE id=?",OffsetDateTime.now().minusSeconds(1),id);service.sweep();
+    var result=service.get(adminAccount.actor(),id);
+    assertEquals("FAILED",result.get("phase"));assertEquals("ENGINE_CONSENT_TIMEOUT",result.get("result"));
+    assertTrue(result.get("safe_message").toString().contains("expirou"));
+    assertNull(result.get("started_at"));
+  }
+
 }

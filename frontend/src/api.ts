@@ -21,6 +21,9 @@ export type Device = {
   last_seen: string | null;
 };
 export type RemoteSession = {
+  phase?: string;
+  safe_message?: string;
+  correlation_id?: string;
   id: string;
   device_id: string;
   mode: string;

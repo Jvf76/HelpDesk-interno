@@ -39,6 +39,9 @@ class SessionController {
     return service.viewer(Security.actor(r), id, ip);
   }
 
+  @GetMapping("/{id}/trace")
+  List<Map<String,Object>> trace(@PathVariable UUID id,HttpServletRequest r) {return service.trace(Security.actor(r),id);}
+
   @PostMapping("/{id}/stop")
   Map<String, Object> stop(@PathVariable UUID id, HttpServletRequest r) {
     service.stop(Security.actor(r), id);

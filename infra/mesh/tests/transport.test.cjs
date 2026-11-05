@@ -7,7 +7,7 @@ const {WebSocketServer,WebSocket}=require('../node_modules/ws');
 const guard=require('../uai-session.cjs');
 async function connect(t,viewOnly=false){
   const id=randomUUID(), guest='Teste de transporte • Uai '+randomUUID();
-  guard.register({publicid:id,userid:'test',nodeid:'test-node',guestName:guest,p:2,consent:72,expireTime:Date.now()+60000,viewOnly});
+  guard.register({publicid:id,userid:'test',nodeid:'test-node',guestName:guest,p:2,consent:72,expireTime:Date.now()+180000,viewOnly});
   const server=new WebSocketServer({host:'127.0.0.1',port:0});
   await once(server,'listening');const ends={};
   server.on('connection',(ws,req)=>{
@@ -29,9 +29,10 @@ test('real sockets carry frame/input after consent and both close on local stop'
   const f=await connect(t);f.event(30);f.event(31);
   const tile=Buffer.from([0,3,0,10,0,0,0,0,255,217]);
   let delivery=once(f.viewer,'message');f.agent.send(tile);
-  assert.deepEqual((await delivery)[0],tile);assert.equal(f.status().state,'ACTIVE');
+  assert.deepEqual((await delivery)[0],tile);assert.equal(f.status().state,'AWAITING_RENDER');
+  f.viewer.send(JSON.stringify({type:'uai-rendered'}));
   const key=Buffer.from([0,1,0,6,0,65]);
-  delivery=once(f.agent,'message');f.viewer.send(key);assert.deepEqual((await delivery)[0],key);
+  delivery=once(f.agent,'message');f.viewer.send(key);assert.deepEqual((await delivery)[0],key);assert.equal(f.status().state,'ACTIVE');
   const closed=[once(f.viewer,'close'),once(f.agent,'close')];f.event(29);
   await Promise.all(closed);assert.equal(f.status().reason,'LOCAL_STOP');
 });

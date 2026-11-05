@@ -7,22 +7,24 @@ using UaiSuporte.Transport;
 namespace UaiSuporte.App;
 internal static class Program
 {
-    [STAThread] static void Main() {
+    [STAThread] static void Main(string[] args) {
         ApplicationConfiguration.Initialize();
         try { UaiSuporte.Agent.Provisioning.RequireCommittedInstallation(); } catch { MessageBox.Show("Instalação incompleta. Conclua o assistente ou a reversão pelo desinstalador antes de abrir o Uai Suporte."); return; }
         using var mutex = new Mutex(true,"Local\\UaiSuporteUnified-"+Environment.UserName,out bool first);
-        if (!first) { MessageBox.Show("O Uai Suporte já está aberto."); return; }
-        Application.Run(new SupportWindow());
+        if (!first) { MessageBox.Show("O Uai Suporte já está em execução. Abra pelo ícone junto ao relógio do Windows."); return; }
+        try{Application.Run(new SupportWindow(args.Contains("--background")));}
+        catch{MessageBox.Show("Não foi possível abrir a interface. Preserve o cadastro e solicite revisão dos arquivos da instalação à TI.","Uai Suporte");}
     }
 }
 sealed class SupportWindow : Form
 {
     readonly WebView2 view = new() { Dock = DockStyle.Fill };
-    readonly ApiSession api = new(deviceIdentity:UaiSuporte.Agent.Provisioning.DeviceIdentity);
+
     readonly UaiSuporte.Agent.ReceiverWindow receiver = new(){TopLevel=false,FormBorderStyle=FormBorderStyle.None,Dock=DockStyle.Fill};
-    readonly ToolStripStatusLabel status = new("Interface incorporada • API: suporte.internal • laboratório 0.6.0");
-    readonly string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"UaiTelecom","UaiSuporte","WebView2");
-    bool ready, closing, polling;
+    readonly ToolStripStatusLabel status = new("Interface incorporada • API: suporte.internal • somente receber suporte");
+    readonly string profile = Path.Combine(UiData.Root,"WebView2");
+    bool ready, closing, exitRequested, initializing;
+    readonly NotifyIcon tray=new();
     Task registrationTask=Task.CompletedTask;
     CancellationTokenSource registrationCancel=new();
     readonly System.Windows.Forms.Timer receivingMonitor = new(){Interval=1000};
@@ -31,57 +33,59 @@ sealed class SupportWindow : Form
     readonly TabControl tabs=new(){Dock=DockStyle.Fill};
     readonly StatusStrip bar=new();
     readonly TabPage receiving=new("Este computador • consentimento e encerramento");
-    readonly TabPage remote=new("Atendimento remoto");
-    readonly System.Windows.Forms.Timer monitor=new(){Interval=2000};
-    RemoteViewer? viewer;
-    string? activeSession;
-    string csrf="";
-    void CloseViewer(){monitor.Stop();var v=viewer;viewer=null;if(v!=null){remote.Controls.Remove(v);v.Dispose();status.Text="Visualizador fechado • imagem e controle desativados";}}
-    async Task StopSession(){CloseViewer();var id=activeSession;activeSession=null;if(id!=null)await api.Send(ApiSession.LocalOrigin+"/index.html","/sessions/"+id+"/stop","POST","{}",csrf);}
-    async Task MonitorSession(){
-      if(polling||activeSession==null)return;polling=true;
-      try{var r=await api.Send(ApiSession.LocalOrigin+"/index.html","/sessions/"+activeSession,"GET",null,null);
-       if(r.Status!=200){await StopSession();status.Text="Sessão interrompida: autorização ou conexão não confirmada.";return;}
-       using var d=JsonDocument.Parse(r.Body);var s=d.RootElement;
-       if(s.GetProperty("ended_at").ValueKind!=JsonValueKind.Null||s.GetProperty("status").GetString() is "STOPPING" or "UNVERIFIED"){CloseViewer();activeSession=null;}
-      }catch{await StopSession();}finally{polling=false;}
-    }
+    void ShowMain(){if(closing)return;ShowInTaskbar=true;Show();WindowState=FormWindowState.Normal;Activate();if(!ready)_=Initialize();}
+    void Background(){Hide();ShowInTaskbar=false;}
     static void Log(string code) {
         try {
-            var directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"UaiTelecom","UaiSuporte");
+            var directory=UiData.Root;
             Directory.CreateDirectory(directory);
             var file=Path.Combine(directory,"app.log");
             if(File.Exists(file) && new FileInfo(file).Length>1048576) File.Move(file,file+".1",true);
             File.AppendAllText(file,$"{DateTimeOffset.UtcNow:O} {code}{Environment.NewLine}");
         } catch { /* Diagnostics never alter TLS or prevent the application from closing. */ }
     }
-    public SupportWindow() {
-        Log("APP_START_0.6.0");
+    public SupportWindow(bool background) {
+        Log("APP_START_RECEIVE_ONLY");
         Text="Uai Suporte • Uai Telecom"; Size=new(1250,850); MinimumSize=new(950,650);
         using var icon=Assembly.GetExecutingAssembly().GetManifestResourceStream("app.ico");
         Icon=new Icon(icon!);
         var panel=new TabPage("Início"); panel.Controls.Add(view); tabs.TabPages.Add(panel);
         receiving.Controls.Add(receiver);tabs.TabPages.Add(receiving);receiver.Show();
-        tabs.TabPages.Add(remote);
-        monitor.Tick+=async(_,_)=>await MonitorSession();
-        FormClosing+=async(_,e)=>{if(closing)return;e.Cancel=true;closing=true;registrationCancel.Cancel();try{await registrationTask;}catch{}await receiver.Shutdown();await StopSession();Close();};
+        tray.Icon=Icon;tray.Text="Uai Suporte • verificando conexão";tray.Visible=true;
+        var menu=new ContextMenuStrip();
+        menu.Items.Add("Abrir Uai Suporte",null,(_,_)=>ShowMain());
+        menu.Items.Add("Copiar Meu código",null,(_,_)=>{if(!string.IsNullOrWhiteSpace(receiver.DeviceCode))Clipboard.SetText(receiver.DeviceCode);});
+        var trayState=menu.Items.Add("Conectando");trayState.Enabled=false;
+        menu.Opening+=(_,_)=>trayState.Text=receiver.ConnectionState;
+        menu.Items.Add("Ver versão",null,(_,_)=>MessageBox.Show(this,"Uai Suporte "+Assembly.GetExecutingAssembly().GetName().Version,"Uai Suporte"));
+        menu.Items.Add("Sair da interface",null,(_,_)=>{if(receiver.SessionActive&&MessageBox.Show(this,"O atendimento será encerrado. O monitoramento continuará pelo serviço. Sair da interface?","Uai Suporte",MessageBoxButtons.YesNo)!=DialogResult.Yes)return;exitRequested=true;Close();});
+        tray.ContextMenuStrip=menu;tray.DoubleClick+=(_,_)=>ShowMain();
+        receiver.AttentionRequested+=()=>{ShowMain();if(tabs.TabPages.Contains(receiving))tabs.SelectedTab=receiving;};
+        FormClosing+=async(_,e)=>{
+          if(closing)return;
+          if(e.CloseReason==CloseReason.UserClosing&&!exitRequested&&receiver.Registered){e.Cancel=true;Background();return;}
+          closing=true;registrationCancel.Cancel();
+          if(e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing){await receiver.Shutdown();return;}
+          e.Cancel=true;try{await registrationTask;}catch{}await receiver.Shutdown();Close();
+        };
         bar.Items.Add(status); bar.Items.Add(receivingStatus); bar.Items.Add(stopReceiving);
         stopReceiving.Click+=async(_,_)=>await receiver.StopLocal();
-        receivingMonitor.Tick+=(_,_)=>{receivingStatus.Text=receiver.ConnectionState;bar.BackColor=receiver.SessionActive?Color.Moccasin:SystemColors.Control;TopMost=receiver.SessionActive;};
+        receivingMonitor.Tick+=(_,_)=>{receivingStatus.Text=receiver.ConnectionState;bar.BackColor=receiver.SessionActive?Color.Moccasin:SystemColors.Control;tray.Text=("Uai Suporte • "+receiver.ConnectionState)[..Math.Min(63,("Uai Suporte • "+receiver.ConnectionState).Length)];};
         receivingMonitor.Start();
         Controls.Add(tabs); Controls.Add(bar);
-        Shown+=async (_,_)=>{await receiver.Initialize();UpdateActivationChrome();await Initialize();};
-        FormClosed+=(_,_)=>{closing=true;receivingMonitor.Dispose();monitor.Dispose();CloseViewer();view.Dispose();api.Dispose();};
+        Shown+=async (_,_)=>{if(background)Background();await receiver.Initialize();UpdateActivationChrome();if(receiver.Registered&&background)Background();else{ShowMain();}};
+        FormClosed+=(_,_)=>{closing=true;receivingMonitor.Dispose();tray.Visible=false;tray.Dispose();view.Dispose();};
     }
     void UpdateActivationChrome() {
-      bool available=UaiSuporte.Agent.Provisioning.HasIdentity;
-      foreach(var page in new[]{receiving,remote}) {
+      bool available=receiver.Registered;
+      foreach(var page in new[]{receiving}) {
         if(available&&!tabs.TabPages.Contains(page))tabs.TabPages.Add(page);
         else if(!available&&tabs.TabPages.Contains(page))tabs.TabPages.Remove(page);
       }
       bar.Visible=available;
     }
     async Task Initialize() {
+        if(initializing||ready)return;initializing=true;
         try {
             var env=await CoreWebView2Environment.CreateAsync(Path.Combine(AppContext.BaseDirectory,"Runtime"),profile);
             await view.EnsureCoreWebView2Async(env);
@@ -139,16 +143,16 @@ sealed class SupportWindow : Form
             if(!Guid.TryParse(id,out _)) return;
             string path=r.GetProperty("path").GetString()??"";
             string method=r.GetProperty("method").GetString()??"";
-            if(r.TryGetProperty("csrf",out var c)&&c.ValueKind==JsonValueKind.String&&!string.IsNullOrEmpty(c.GetString()))csrf=c.GetString()!;
             ApiReply reply;
-            if(path=="/desktop/device"&&method=="GET") reply=new(200,JsonSerializer.Serialize(new{code=receiver.DeviceCode,state=receiver.ConnectionState,name=Environment.MachineName,registered=UaiSuporte.Agent.Provisioning.HasIdentity}));
+            if(path=="/desktop/device"&&method=="GET") reply=new(200,JsonSerializer.Serialize(new{code=receiver.DeviceCode,state=receiver.ConnectionState,name=Environment.MachineName,registered=receiver.Registered,error=receiver.ActivationError}));
             else if(path=="/desktop/activate"&&method=="POST") {
               if(!registrationTask.IsCompleted)reply=ApiSession.Error(409,"Ativação em andamento.");
               else {
                 string token=r.GetProperty("body").GetProperty("token").GetString()??"";
                 try {
-                  registrationTask=UaiSuporte.Agent.Provisioning.Activate(token,registrationCancel.Token);
-                  await registrationTask;await receiver.Initialize();UpdateActivationChrome();reply=new(200,"{}");
+                  var activation=UaiSuporte.Agent.LocalChannel.Send(new("activate",Token:token),registrationCancel.Token);
+                  registrationTask=activation;var result=await activation;reply=new(result.Status,result.Body);
+                  await receiver.Initialize();UpdateActivationChrome();if(result.Status==200)Background();
                 } catch(HttpRequestException ex) { reply=ApiSession.Error(ex.HttpRequestError==HttpRequestError.SecureConnectionError?495:503,ex.HttpRequestError==HttpRequestError.SecureConnectionError?"Certificado TLS recusado.":"Servidor indisponível. Tente novamente mantendo o mesmo token."); }
                 catch(InvalidOperationException ex) {reply=ApiSession.Error(400,ex.Message);}
                 catch {reply=ApiSession.Error(400,"Cadastro incompleto ou corrompido. Solicite recuperação administrativa.");}
@@ -156,29 +160,12 @@ sealed class SupportWindow : Form
               }
             }
             else if(path=="/desktop/receiving"&&method=="POST"){if(tabs.TabPages.Contains(receiving)){tabs.SelectedTab=receiving;reply=new(200,"{}");}else reply=ApiSession.Error(409,"Ative este computador primeiro.");}
-            else if(path=="/desktop/viewer/close"&&method=="POST") {await StopSession();reply=new(200,"{}");}
+            else if(path=="/desktop/background"&&method=="POST") {if(receiver.Registered){Background();reply=new(200,"{}");}else reply=ApiSession.Error(409,"Ative este computador primeiro.");}
             else {
-              if(path.EndsWith("/stop"))await StopSession();
               string? body=r.TryGetProperty("body",out var b)&&b.ValueKind!=JsonValueKind.Null?b.GetRawText():null;
-              if(path=="/connections"&&method=="POST") {
-                using var request=JsonDocument.Parse(body??"{}");
-                body=JsonSerializer.Serialize(new{code=request.RootElement.GetProperty("code").GetString(),mode=request.RootElement.GetProperty("mode").GetString(),windowsUser=Environment.UserDomainName+"\\"+Environment.UserName});
-              }
-              reply=await api.Send(e.Source,path,method,body,csrf);
-              if(path.EndsWith("/launch")&&reply.Status==200){
-                await StopSession();activeSession=path.Split('/')[2];
-                try {
-                  using var data=JsonDocument.Parse(reply.Body);
-                  viewer=new RemoteViewer(kind=>{
-                    if(closing||IsDisposed)return;
-                    if(kind=="frame")status.Text="Imagem renderizada no aplicativo • sessão autorizada";
-                    else {BeginInvoke((Action)(async()=>{if(kind=="disconnected"){CloseViewer();activeSession=null;}else await StopSession();status.Text=kind=="tls"?"Certificado do motor remoto recusado.":"Conexão remota encerrada • imagem e controle desativados.";}));}
-                  });
-                  remote.Controls.Add(viewer);tabs.SelectedTab=remote;status.Text="Conectando • aguardando consentimento e imagem";
-                  await viewer.Start(data.RootElement.Clone(),profile+"-viewer");
-                  monitor.Start();reply=new(200,"{}");
-                } catch {await StopSession();reply=ApiSession.Error(502,"Não foi possível abrir o visualizador interno.");}
-              }
+              string? action=method=="GET"?path switch {"/identity"=>"identity","/connections"=>"history",_=>null}:null;
+              if(action==null)reply=ApiSession.Error(403,"Operação não permitida.");
+              else {try{var response=await UaiSuporte.Agent.LocalChannel.Send(new(action));reply=new(response.Status,response.Body);}catch{reply=ApiSession.Error(503,"Serviço indisponível. Cadastro preservado.");}}
             }
             Log("API_STATUS_"+reply.Status);
             if(closing || !ApiSession.TrustedSource(view.CoreWebView2.Source)) return;

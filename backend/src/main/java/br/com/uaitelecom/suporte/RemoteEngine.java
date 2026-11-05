@@ -3,7 +3,8 @@ package br.com.uaitelecom.suporte;
 interface RemoteEngine {
   record Share(String id, String url) {}
 
-  record Observation(String state, String reason, Long startedAt, Long consentAt, Long endedAt) {
+  record Observation(String state, String reason, Long startedAt, Long consentAt, Long endedAt, java.util.Map<String,Object> nativeDiagnostic) {
+    Observation(String state,String reason,Long startedAt,Long consentAt,Long endedAt){this(state,reason,startedAt,consentAt,endedAt,java.util.Map.of());}
     Observation(String state, String reason, Long startedAt, Long consentAt) {
       this(state, reason, startedAt, consentAt, null);
     }
