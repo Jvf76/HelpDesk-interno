@@ -10,3 +10,8 @@ print('Diagnostic allowlist: raw secrets, unknown fields, free text and invalid 
 
 r=m.sanitize({'session':'11111111-1111-4111-8111-111111111111','stage':'CREATE_FAILED','numericCode':5,'codeField':'code','errorKind':'Error','message':'SECRET'})
 assert r['numericCode']==5 and 'SECRET' not in json.dumps(r)
+
+r=m.sanitize({'session':'11111111-1111-4111-8111-111111111111','stage':'CREATE_FAILED','failureStep':'CLASSIC_CREATE','errorShape':'string','errorCategory':'CHILD_EXEC_FAILED','message':'SECRET','stack':'SECRET'})
+assert r['failureStep']=='CLASSIC_CREATE' and r['errorCategory']=='CHILD_EXEC_FAILED' and 'SECRET' not in json.dumps(r)
+r=m.sanitize({'session':'11111111-1111-4111-8111-111111111111','failureStep':'SECRET','errorShape':'SECRET','errorCategory':'SECRET'})
+assert set(r)=={'session'}

@@ -1,6 +1,6 @@
 // Diagnostic-only instrumentation of the version-pinned JS core. Never approves a prompt.
 import fs from 'node:fs';import {fileURLToPath} from 'node:url';
-export function instrument(source){
+function instrumentV2(source){
  let s=source.replaceAll('\r\n','\n');
  if(s.includes('// UAI consent diagnostics v2'))return s;
  const upgrade=s.includes('// UAI consent diagnostics v1');
@@ -52,6 +52,51 @@ function uaiConsentFailure(ws, stage, error) {
  edit("    pr.then(kvm_consentpromise_resolved, kvm_consentpromise_rejected);\n}", "    pr.then(kvm_consentpromise_resolved, kvm_consentpromise_rejected);\n    } catch (uaiCreateError) {\n        uaiConsentFailure(ws, 'CREATE_FAILED', uaiCreateError);\n        throw uaiCreateError; // Preserve upstream failure; never continue without consent.\n    }\n}");
  edit("    uaiConsentDiagnostic(this.ws, 'RESPONSE_REJECTED', this);", "    uaiConsentDiagnostic(this.ws, 'RESPONSE_REJECTED', this);\n    uaiConsentFailure(this.ws, 'PROMISE_REJECTED', e);");
  return s;
+}
+// Retain v2 events and the exact native calls. Locate a synchronous failure without
+// exporting its message, path, arguments or stack, and without reading GetLastError
+// after intervening calls (which would not reliably describe the failed operation).
+export function instrument(source){
+ let s=source.replaceAll('\r\n','\n');
+ if(s.includes('// UAI consent diagnostics v3'))return s;
+ s=instrumentV2(s);
+ function edit(from,to){if(s.split(from).length!==2)throw Error('Unexpected v3 diagnostic anchor');s=s.replace(from,to);}
+ edit('// UAI consent diagnostics v2','// UAI consent diagnostics v3');
+ const helper=`function uaiConsentFailureStep(ws, step, error) {
+    if (!ws || !ws.httprequest || !/ • Uai [0-9a-f-]{36}$/i.test(ws.httprequest.guestname || '')) return;
+    try {
+        var shape = error === null ? 'null' : typeof error;
+        if (['null','string','object','undefined','number','boolean'].indexOf(shape) < 0) shape = 'OTHER';
+        var text = typeof error == 'string' ? error : (error && typeof error.message == 'string' ? error.message : '');
+        var category = 'UNCLASSIFIED';
+        if (text.length <= 4096) {
+            if (/^(?:Error: )?child_process\\.execFile\\(\\): Could not exec \\[[^\\r\\n]{1,2048}\\]$/.test(text)) category = 'CHILD_EXEC_FAILED';
+            else if (text === 'Invalid Parameters') category = 'CHILD_ARGUMENTS_INVALID';
+            else if (text === 'Insufficient permission to run as this user') category = 'CHILD_USER_PERMISSION';
+            else if (text === 'invalid user format') category = 'CHILD_USER_FORMAT';
+            else if (text === 'Not Connected') category = 'CHILD_IPC_DISCONNECTED';
+        }
+        MeshServerLogEx(9102, ['CREATE_FAILED',step,shape,category], 'UAI_NATIVE_CONSENT_FAILURE_STEP', ws.httprequest);
+    } catch (ignore) { /* Preserve the original exception even if diagnostics fail. */ }
+}
+`;
+ edit('function kvm_consent_ask(ws){',helper+'\nfunction kvm_consent_ask(ws){');
+ const start=s.indexOf('function kvm_consent_ask(ws){'),end=s.indexOf('function kvm_consentpromise_rejected',start);
+ if(end<0)throw Error('Missing consent function boundary');
+ let body=s.slice(start,end);
+ function locate(from,to,count=1){if(body.split(from).length!==count+1)throw Error('Unexpected native consent step anchor');body=body.replaceAll(from,to);}
+ locate("    try {\n    // Send a console message", "    var uaiStep = 'WAITING_NOTIFICATION';\n    try {\n    // Send a console message");
+ locate("    var consentMessage =", "    uaiStep = 'PROMPT_TEXT';\n    var consentMessage =");
+ locate("    var pr;", "    uaiStep = 'ENGINE_SELECTION';\n    var pr;");
+ locate("            var ipr = server_getUserImage", "            uaiStep = 'ENHANCED_USER_IMAGE';\n            var ipr = server_getUserImage");
+ locate("            pr = ipr.then", "            uaiStep = 'ENHANCED_PROMISE';\n            pr = ipr.then");
+ locate("pr = require('message-box').create(consentTitle, consentMessage, ws.httprequest.consentTimeout, null, ws.tsid);", "uaiStep = 'CLASSIC_MODULE';\n            var uaiMessageBox = require('message-box');\n            uaiStep = 'CLASSIC_CREATE';\n            pr = uaiMessageBox.create(consentTitle, consentMessage, ws.httprequest.consentTimeout, null, ws.tsid);",2);
+ locate('    pr.ws = ws;', "    uaiStep = 'PROMISE_ATTACH';\n    pr.ws = ws;");
+ locate('    ws.pause();', "    uaiStep = 'STREAM_PAUSE';\n    ws.pause();");
+ locate("    ws.prependOnceListener('end'", "    uaiStep = 'END_HANDLER';\n    ws.prependOnceListener('end'");
+ locate('    pr.then(kvm_consentpromise_resolved, kvm_consentpromise_rejected);', "    uaiStep = 'CONSENT_CALLBACKS';\n    pr.then(kvm_consentpromise_resolved, kvm_consentpromise_rejected);");
+ locate("        uaiConsentFailure(ws, 'CREATE_FAILED', uaiCreateError);", "        uaiConsentFailure(ws, 'CREATE_FAILED', uaiCreateError);\n        uaiConsentFailureStep(ws, uaiStep, uaiCreateError);");
+ return s.slice(0,start)+body+s.slice(end);
 }
 // Adds logging only to an existing relay, including the older LAB implementation.
 // Does not replace its policy, state machine, deadlines or capability version.

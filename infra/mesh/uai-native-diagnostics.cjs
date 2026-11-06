@@ -2,7 +2,7 @@
 // Called only after the relay matches the authenticated node and the exact attempt.
 // Diagnostic messages never grant consent or change the remote session lifecycle.
 function recordNativeDiagnostic(s,event,log=console.info,clock=Date.now){
- if(event.msgid!==9100&&event.msgid!==9101)return false;
+ if(![9100,9101,9102].includes(event.msgid))return false;
  if(!/ • Uai [0-9a-f-]{36}$/i.test(s.guest||'')||s.node!==event.nodeid||s.guest!==event.guestname)return true;
  if(!Array.isArray(event.msgArgs)||(s.nativeDiagCount||0)>=64)return true;
  let value;
@@ -13,11 +13,16 @@ function recordNativeDiagnostic(s,event,log=console.info,clock=Date.now){
   s.nativeDiagnostic={...s.nativeDiagnostic,stage,targetSession,engineSession,consoleSession};
   if(helperPid>0){s.nativeDiagnostic.helperPid=helperPid;s.nativeDiagnostic.helperSession=helperSession;}
   value=s.nativeDiagnostic;
- }else{
+ }else if(event.msgid===9101){
   if(event.msgArgs.length!==4)return true;
   const [stage,errorKind,codeField,numericCode]=event.msgArgs;
   if(!['CREATE_FAILED','PROMISE_REJECTED'].includes(stage)||!['Error','TypeError','RangeError','ReferenceError','SyntaxError','EvalError','URIError','UNKNOWN'].includes(errorKind)||!['win32Error','lastError','errorCode','errno','code','NONE'].includes(codeField)||![-1,2,3,5,6,8,87,1008,1314,1816,-2147024891].includes(numericCode))return true;
   value={stage,errorKind,codeField,numericCode};
+ }else{
+  if(event.msgArgs.length!==4)return true;
+  const [stage,failureStep,errorShape,errorCategory]=event.msgArgs;
+  if(stage!=='CREATE_FAILED'||!['WAITING_NOTIFICATION','PROMPT_TEXT','ENGINE_SELECTION','ENHANCED_USER_IMAGE','ENHANCED_PROMISE','CLASSIC_MODULE','CLASSIC_CREATE','PROMISE_ATTACH','STREAM_PAUSE','END_HANDLER','CONSENT_CALLBACKS'].includes(failureStep)||!['null','string','object','undefined','number','boolean','OTHER'].includes(errorShape)||!['UNCLASSIFIED','CHILD_EXEC_FAILED','CHILD_ARGUMENTS_INVALID','CHILD_USER_PERMISSION','CHILD_USER_FORMAT','CHILD_IPC_DISCONNECTED'].includes(errorCategory))return true;
+  value={stage,failureStep,errorShape,errorCategory};
  }
  s.nativeDiagCount=(s.nativeDiagCount||0)+1;
  log('UAI_NATIVE_CONSENT '+JSON.stringify({session:s.guest.slice(-36),...value,at:clock()}));

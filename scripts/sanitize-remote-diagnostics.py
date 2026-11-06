@@ -35,6 +35,9 @@ def sanitize(row):
     if row.get('errorKind') in ('Error','TypeError','RangeError','ReferenceError','SyntaxError','EvalError','URIError','UNKNOWN'): out['errorKind']=row['errorKind']
     if row.get('codeField') in ('win32Error','lastError','errorCode','errno','code','NONE'): out['codeField']=row['codeField']
     if type(row.get('numericCode')) is int and row['numericCode'] in (-1,2,3,5,6,8,87,1008,1314,1816,-2147024891): out['numericCode']=row['numericCode']
+    if row.get('failureStep') in ('WAITING_NOTIFICATION','PROMPT_TEXT','ENGINE_SELECTION','ENHANCED_USER_IMAGE','ENHANCED_PROMISE','CLASSIC_MODULE','CLASSIC_CREATE','PROMISE_ATTACH','STREAM_PAUSE','END_HANDLER','CONSENT_CALLBACKS'): out['failureStep']=row['failureStep']
+    if row.get('errorShape') in ('null','string','object','undefined','number','boolean','OTHER'): out['errorShape']=row['errorShape']
+    if row.get('errorCategory') in ('UNCLASSIFIED','CHILD_EXEC_FAILED','CHILD_ARGUMENTS_INVALID','CHILD_USER_PERMISSION','CHILD_USER_FORMAT','CHILD_IPC_DISCONNECTED'): out['errorCategory']=row['errorCategory']
     return out
 def export(source):
     if source.stat().st_size>8*1024*1024: raise ValueError('Entrada excede 8 MiB')
