@@ -42,7 +42,20 @@ O fechamento com CONSENT_MISSING é a decisão de proteção do relay; não foi
 registrado timeout como motivo desta tentativa. Não concluir que um pacote
 rejeitado era imagem: nenhum conteúdo foi retido.
 
-## Complemento v3 preparado, não implantado
+## Complemento v3 implantado no LAB, aguardando nova tentativa Windows
+
+O operador autorizou a continuidade dos diagnósticos e ajustes do laboratório,
+reservando novas confirmações para ações críticas ou fora do escopo. O complemento
+foi aplicado entre 15:14:22 e 15:14:31 UTC em 06/11/2026. Na conferência anterior
+havia apenas o computador autorizado conectado, nenhum relay, compartilhamento
+vigente ou sessão remota aberta. Somente o MeshCentral LAB foi reiniciado.
+
+TLS/WSS autenticado, capacidades originais e rejeição de bootstrap inexistente
+foram verificados. O agente reconectou e anunciou outra identificação de core.
+Configuração, unidade de serviço, backend e executáveis protegidos permaneceram
+inalterados. O recebimento de eventos 9102 e o resultado de uma nova solicitação
+ainda dependem do teste Windows; a reconexão não comprova exibição do diálogo.
+Registro privado: `.tools/native-consent-diagnostic-v3/deployment.json`.
 
 O patch mantém as chamadas nativas, argumentos, promises, callbacks e exceções.
 Adiciona uma etapa local antes de cada operação de preparação. Se ocorrer falha,
@@ -74,8 +87,8 @@ Pacote local de revisão: `.tools/native-consent-diagnostic-v3/review/`.
 O manifesto contém candidatos e backups contra o runtime v2 em execução. O relay
 uai-session.cjs é idêntico antes/depois; apenas o core diagnóstico e seu coletor
 recebem o complemento. Os hashes live foram novamente conferidos após preparar.
-A implantação requer autorização porque o core é distribuído aos agentes do LAB.
-Até lá, o runtime continua em v2, sem reinício nesta etapa.
+A autorização para essa distribuição foi recebida e registrada acima. O runtime
+agora serve o complemento v3; os backups v2 permitem reverter somente esta etapa.
 
 ## Validação
 
