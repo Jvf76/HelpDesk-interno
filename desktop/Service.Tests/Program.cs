@@ -33,4 +33,35 @@ Check(new NativeConsentDiagnostic("HELPER_READY",3,0,2,123,3).Placement(2)=="DIA
 Check(!ServiceProtocol.Allowed(new("native-dialog",RequestId:id,DialogPid:0)),"invalid PID rejected");
 Check(!ServiceProtocol.Allowed(new("consent",RequestId:id,Decision:"accept",DialogPid:123)),"diagnostics cannot carry consent");
 Check(ServiceProtocol.Allowed(new("native-dialog",RequestId:id,DialogPid:123)),"bounded diagnostic report");
+
+var launch=new FakeMeshLaunch();MeshLaunchPolicy.Run(3,()=>true,launch);
+Check(string.Join(",",launch.Events)=="create,session,job,session,resume","interactive engine stays suspended until session and job verified");
+foreach(int invalidSession in new[]{-1,0}){
+ var fake=new FakeMeshLaunch();try{MeshLaunchPolicy.Run(invalidSession,()=>true,fake);throw new Exception("session zero accepted");}catch(InvalidOperationException){Check(fake.Events.Count==0,"no process without positive target session");}
+}
+foreach(string failAt in new[]{"create","job","resume"}){
+ var fake=new FakeMeshLaunch{FailAt=failAt};try{MeshLaunchPolicy.Run(3,()=>true,fake);throw new Exception("failure accepted");}catch(IOException){Check(fake.Events.Last()=="abort","native launch failure terminates owned process/job");if(failAt!="resume")Check(!fake.Events.Contains("resume"),"no running child before successful assignment");}
+}
+var wrongSession=new FakeMeshLaunch{ActualSession=0};try{MeshLaunchPolicy.Run(3,()=>true,wrongSession);throw new Exception("wrong session accepted");}catch(InvalidOperationException){Check(wrongSession.Events.Last()=="abort"&&!wrongSession.Events.Contains("job"),"wrong-session suspended child terminated");}
+for(int expiresAt=1;expiresAt<=4;expiresAt++){
+ int authorizationCalls=0;var fake=new FakeMeshLaunch();
+ try{MeshLaunchPolicy.Run(3,()=>++authorizationCalls<expiresAt,fake);throw new Exception("expired presenter accepted");}
+ catch(InvalidOperationException){
+  if(expiresAt==1)Check(fake.Events.Count==0,"missing presenter blocks process creation");
+  else Check(fake.Events.Last()=="abort","presenter loss wins during creation, assignment or resume");
+  if(expiresAt<4)Check(!fake.Events.Contains("resume"),"stale session never resumes suspended engine");
+ }
+}
 Console.WriteLine($"{count} service policy checks passed. No Windows SCM, pipes/ACL, DPAPI, UI or Mesh capture executed.");
+
+sealed class FakeMeshLaunch:ISuspendedMeshLaunch {
+ public List<string> Events {get;}=[];
+ public string? FailAt {get;init;}
+ public int ActualSession {get;init;}=3;
+ void Event(string name){Events.Add(name);if(name==FailAt)throw new IOException("injected native failure");}
+ public void CreateSuspended()=>Event("create");
+ public int SessionId{get{Event("session");return ActualSession;}}
+ public void AssignJob()=>Event("job");
+ public void Resume()=>Event("resume");
+ public void Abort()=>Event("abort");
+}

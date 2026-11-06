@@ -49,7 +49,7 @@ sealed class SetupWindow : Form
         brand.Controls.Add(new Label { Text = "uai•", ForeColor = Color.FromArgb(255, 172, 124), Font = new("Segoe UI", 42, FontStyle.Bold), AutoSize = true, Location = new(24, 40) });
         brand.Controls.Add(new Label { Text = "Suporte", ForeColor = Color.White, Font = new("Segoe UI", 22), AutoSize = true, Location = new(28, 120) });
         brand.Controls.Add(new Label { Text = "Acesso remoto\ncom sua autorização.", ForeColor = Color.FromArgb(182, 202, 220), AutoSize = true, Location = new(28, 190) });
-        brand.Controls.Add(new Label { Text = "LAB 0.8.0 • uso autorizado\nInstalador não assinado", ForeColor = Color.FromArgb(182, 202, 220), Dock = DockStyle.Bottom, Height = 70, Padding = new(24, 12, 0, 0) });
+        brand.Controls.Add(new Label { Text = "LAB 0.8.1 • uso autorizado\nInstalador não assinado", ForeColor = Color.FromArgb(182, 202, 220), Dock = DockStyle.Bottom, Height = 70, Padding = new(24, 12, 0, 0) });
         root.Controls.Add(brand, 0, 0); root.Controls.Add(content, 1, 0);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new(14), BackColor = Color.FromArgb(245, 246, 248), Margin = Padding.Empty };
         footer.Controls.Add(cancel); footer.Controls.Add(next); footer.Controls.Add(back);
@@ -183,7 +183,7 @@ sealed class SetupWindow : Form
     {
         bool editHosts = hosts.Checked, deleteCa = removeCa.Checked;
         busy = true; Show(Page.Working);
-        SetupAudit.Write(removing ? "UNINSTALL_START" : "INSTALL_START_VERSION_0.8.0_WIZARD");
+        SetupAudit.Write(removing ? "UNINSTALL_START" : "INSTALL_START_VERSION_0.8.1_WIZARD");
         try
         {
             await Worker(() => { if (removing) Installation.Remove(deleteCa); else Installation.Install(editHosts, Report); });

@@ -10,9 +10,9 @@
 [Setup]
 AppId=UaiSuporte-LAB-Inno
 AppName=Uai Suporte
-AppVersion=0.8.0
+AppVersion=0.8.1
 AppPublisher=Uai Telecom
-VersionInfoVersion=0.8.0.0
+VersionInfoVersion=0.8.1.0
 DefaultDirName={autopf}\UaiTelecom\UaiSuporte
 CreateAppDir=no
 Uninstallable=no
@@ -31,7 +31,7 @@ WizardImageFile=assets\wizard.bmp
 WizardSmallImageFile=assets\small.bmp
 LicenseFile=..\..\.tools\setup-deps\webview2-license.txt
 OutputDir={#OutputPath}
-OutputBaseFilename=UaiSuporte-Setup-0.8.0-Lab
+OutputBaseFilename=UaiSuporte-Setup-0.8.1-Lab
 Compression=none
 SolidCompression=no
 SetupLogging=no
@@ -41,7 +41,7 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 
 [Messages]
 WelcomeLabel1=Bem-vindo ao Assistente de Instalação do Uai Suporte
-WelcomeLabel2=O assistente instalará o Uai Suporte neste computador.%n%nClique em Avançar para continuar.%n%nVersão LAB 0.8.0 — uso autorizado em laboratório. Instalador não assinado.
+WelcomeLabel2=O assistente instalará o Uai Suporte neste computador.%n%nClique em Avançar para continuar.%n%nVersão LAB 0.8.1 — uso autorizado em laboratório. Instalador não assinado.
 FinishedHeadingLabel=Concluindo o Assistente de Instalação do Uai Suporte
 FinishedLabel=O Uai Suporte foi instalado com sucesso neste computador.%n%nAbra o Uai Suporte pelo menu Iniciar. Atualizações preservam o cadastro existente; somente uma primeira ativação exige token.
 ReadyLabel1=Pronto para instalar o Uai Suporte.

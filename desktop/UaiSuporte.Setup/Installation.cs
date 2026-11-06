@@ -93,7 +93,7 @@ internal static class Installation
     {
         using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
         using var key = machine.CreateSubKey(UninstallKey);
-        key.SetValue("DisplayName", "Uai Suporte"); key.SetValue("DisplayVersion", "0.8.0");
+        key.SetValue("DisplayName", "Uai Suporte"); key.SetValue("DisplayVersion", "0.8.1");
         key.SetValue("Publisher", "Uai Telecom - LAB não assinado"); key.SetValue("InstallLocation", Root);
         key.SetValue("UninstallString", "\"" + Installer + "\" --uninstall"); key.SetValue("DisplayIcon", Installer);
         key.SetValue("NoModify", 1, RegistryValueKind.DWord); key.SetValue("NoRepair", 1, RegistryValueKind.DWord);

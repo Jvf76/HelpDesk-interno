@@ -26,7 +26,7 @@ sealed class ServiceRuntime:IDisposable {
   if(stopped)accepted=null;else lease.Clear();
   requests=[];return stopped;
  }}
- async Task Watchdog(CancellationToken ct){try{while(!ct.IsCancellationRequested){lock(motorLock){if((mesh.Running||accepted.HasValue)&&(!lease.Live(lease.Pid,Environment.TickCount64)||!LocalChannel.PresenterCurrent(lease.Pid)||(accepted.HasValue&&lease.Displayed!=accepted)))StopMotor("PRESENTER_LOST_STOP");}await Task.Delay(500,ct);}}catch(OperationCanceledException){}catch{StopMotor("WATCHDOG_FAILED");}}
+ async Task Watchdog(CancellationToken ct){try{while(!ct.IsCancellationRequested){lock(motorLock){if((mesh.Running||accepted.HasValue)&&(!lease.Live(lease.Pid,Environment.TickCount64)||!LocalChannel.PresenterCurrent(lease.Pid)||(mesh.Running&&mesh.SessionId!=LocalChannel.ActiveSession())||(accepted.HasValue&&lease.Displayed!=accepted)))StopMotor("PRESENTER_LOST_STOP");}await Task.Delay(500,ct);}}catch(OperationCanceledException){}catch{StopMotor("WATCHDOG_FAILED");}}
  async Task NetworkLoop(CancellationToken ct){try{while(!ct.IsCancellationRequested){await gate.WaitAsync(ct);try{await Tick(ct);}catch(HttpRequestException e){blocked=e.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;fault=e.HttpRequestError==HttpRequestError.SecureConnectionError?"Certificado TLS recusado.":blocked?"Credencial revogada. Solicite reativação administrativa.":"Servidor indisponível.";state="Offline";StopMotor("NETWORK_FAILED_STOP");schedule.Failure(DateTimeOffset.UtcNow,Random.Shared.NextDouble()*.2-.1);nextRequests=Environment.TickCount64+5000;}catch(Exception e) when(e is not OperationCanceledException){state="Offline";fault="Componente interno indisponível. Consulte a TI.";StopMotor("LOCAL_COMPONENT_FAILED");schedule.Failure(DateTimeOffset.UtcNow,0);}finally{gate.Release();}await Task.Delay(1000,ct);}}catch(OperationCanceledException){}finally{StopMotor("SERVICE_STOP");}}
  async Task Tick(CancellationToken ct){
   if(identity==null||blocked)return;
@@ -38,7 +38,13 @@ sealed class ServiceRuntime:IDisposable {
    if(data.RootElement.GetProperty("deviceId").GetString()!=identity.DeviceId)throw new InvalidDataException();
    identityChecked=true;bound=data.RootElement.GetProperty("bound").GetBoolean();string? code=data.RootElement.GetProperty("code").GetString();if(code!=identity.Code){identity=identity with{Code=code};DeviceStore.Save("identity.bin",identity);}
   }
-  lock(motorLock){if(!offPending&&bound&&setup!=null&&lease.Live(lease.Pid,Environment.TickCount64)&&LocalChannel.PresenterCurrent(lease.Pid)&&!mesh.Running){mesh.Start(setup.MeshExe,setup.MeshSha256);Log("MOTOR_STARTED");}}
+  lock(motorLock){if(!offPending&&bound&&setup!=null&&lease.Live(lease.Pid,Environment.TickCount64)&&LocalChannel.PresenterCurrent(lease.Pid)&&!mesh.Running){
+   int session=LocalChannel.ActiveSession(),presenter=lease.Pid;
+   bool Authorized()=>!offPending&&bound&&lease.Pid==presenter&&lease.Live(presenter,Environment.TickCount64)&&LocalChannel.PresenterCurrent(presenter)&&LocalChannel.ActiveSession()==session;
+   try{mesh.StartInteractive(setup.MeshExe,setup.MeshSha256,session,Authorized);}
+   catch(MeshLaunchException e){Log("MOTOR_START_FAILED "+JsonSerializer.Serialize(new{stage=e.Stage,win32Code=e.NativeErrorCode,targetSession=session}));throw;}
+   Log("MOTOR_STARTED");Log("MOTOR_PLACEMENT "+JsonSerializer.Serialize(new{enginePid=mesh.ProcessId,engineSession=mesh.SessionId,activeSession=session,killOnJobClose=true}));
+  }}
   if(due){
    bool collect=schedule.MetricsDue(now);MonitoringCollector.Sample? sample=collect?collector.Collect():null;
    using var response=await http.PostAsJsonAsync("api/agent/presence",new{machineName=Environment.MachineName,os=System.Runtime.InteropServices.RuntimeInformation.OSDescription,windowsUser=LocalChannel.ActiveUser(),appVersion=typeof(ReceiverWindow).Assembly.GetName().Version!.ToString(),agentVersion="legacy-1.2.6 LAB",internalIp=MonitoringCollector.InternalIp(),uptimeSeconds=Environment.TickCount64/1000,health=bound?mesh.Running?"OK":"STOPPED":"UNBOUND",serviceState="RUNNING",observedAt=now,metrics=sample},ct);
