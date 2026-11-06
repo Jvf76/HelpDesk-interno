@@ -7,3 +7,6 @@ with tempfile.TemporaryDirectory() as folder:
     rows=m.export(f);assert len(rows)==1;assert rows[0]['next']=='ACTIVE';assert 'SECRET' not in json.dumps(rows);assert rows[0]['elapsedMs']==5
     assert m.sanitize({'session':'11111111-1111-4111-8111-111111111111','code':'token=SECRET','next':'SECRET'}).keys()=={'session'}
 print('Diagnostic allowlist: raw secrets, unknown fields, free text and invalid identities excluded.')
+
+r=m.sanitize({'session':'11111111-1111-4111-8111-111111111111','stage':'CREATE_FAILED','numericCode':5,'codeField':'code','errorKind':'Error','message':'SECRET'})
+assert r['numericCode']==5 and 'SECRET' not in json.dumps(r)

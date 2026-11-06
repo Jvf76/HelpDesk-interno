@@ -81,14 +81,7 @@ function agentEvent(event) {
   if (!marker.test(event.guestname || '')) return;
   for (const s of sessions.values()) {
     if (s.node!==event.nodeid || s.guest!==event.guestname) continue;
-    if(event.msgid===9100&&Array.isArray(event.msgArgs)&&event.msgArgs.length===6){
-      const [stage,targetSession,engineSession,consoleSession,helperPid,helperSession]=event.msgArgs;
-      if(!['REQUESTED','HELPER_CREATED','HELPER_READY','RESPONSE_ACCEPTED','RESPONSE_REJECTED'].includes(stage)||![targetSession,engineSession,consoleSession,helperPid,helperSession].every(x=>Number.isInteger(x)&&x>=-1&&x<=2147483647))return;
-      s.nativeDiagnostic={...s.nativeDiagnostic,stage,targetSession,engineSession,consoleSession};
-      if(helperPid>0){s.nativeDiagnostic.helperPid=helperPid;s.nativeDiagnostic.helperSession=helperSession;}
-      console.info('UAI_NATIVE_CONSENT '+JSON.stringify({session:s.guest.slice(-36),...s.nativeDiagnostic,at:now()}));
-      return;
-    }
+    if (require('./uai-native-diagnostics.cjs').recordNativeDiagnostic(s,event)) return;
     // Native agent logs can arrive just after relay close. Refine the reason only.
     if (event.msgid===29 || event.msgid===34 || event.msgid===32) {
       const reason=event.msgid===29?'LOCAL_STOP':event.msgid===34?'REJECTED':'PRIVACY_BAR_FAILED';

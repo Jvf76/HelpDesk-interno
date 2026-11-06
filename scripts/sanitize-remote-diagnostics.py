@@ -28,10 +28,13 @@ def sanitize(row):
         if type(row.get(key)) is int and 0<=row[key]<=86400000: out[key]=row[key]
     for key in ('viewerAttached','peerPaired','protocolRequested','nativeConsentRequested','nativeConsentGranted','privacyBar','firstFrame'):
         if type(row.get(key)) is bool: out[key]=row[key]
-    if row.get('stage') in ('REQUESTED','HELPER_CREATED','HELPER_READY','RESPONSE_ACCEPTED','RESPONSE_REJECTED','WINDOW_VISIBLE_REPORTED'): out['stage']=row['stage']
+    if row.get('stage') in ('REQUESTED','HELPER_CREATED','HELPER_READY','RESPONSE_ACCEPTED','RESPONSE_REJECTED','WINDOW_VISIBLE_REPORTED','CREATE_FAILED','PROMISE_REJECTED'): out['stage']=row['stage']
     if row.get('decision') in ('accept','accept-view','reject'): out['decision']=row['decision']
     for key in ('targetSession','engineSession','consoleSession','helperPid','helperSession','verifiedHelperSession','activeSession','reporterPid'):
         if type(row.get(key)) is int and -1<=row[key]<=2147483647: out[key]=row[key]
+    if row.get('errorKind') in ('Error','TypeError','RangeError','ReferenceError','SyntaxError','EvalError','URIError','UNKNOWN'): out['errorKind']=row['errorKind']
+    if row.get('codeField') in ('win32Error','lastError','errorCode','errno','code','NONE'): out['codeField']=row['codeField']
+    if type(row.get('numericCode')) is int and row['numericCode'] in (-1,2,3,5,6,8,87,1008,1314,1816,-2147024891): out['numericCode']=row['numericCode']
     return out
 def export(source):
     if source.stat().st_size>8*1024*1024: raise ValueError('Entrada excede 8 MiB')
