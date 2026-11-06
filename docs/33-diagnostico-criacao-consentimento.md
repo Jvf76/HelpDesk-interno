@@ -1,4 +1,28 @@
-# Diagnóstico da criação do diálogo nativo — preparado, não implantado
+# Diagnóstico da criação do diálogo nativo — instrumentação implantada no LAB
+
+## Implantação autorizada em 6 de novembro de 2026
+
+Após autorização explícita do operador, os quatro arquivos preparados foram
+aplicados entre 13:51:44 e 13:51:53 UTC. Somente o serviço MeshCentral LAB foi
+reiniciado. A conferência anterior encontrou um agente conectado, o
+DESKTOP-0ON0ICK autorizado, nenhuma sessão remota, nenhum relay aberto e nenhum
+compartilhamento vigente desse dispositivo. Os outros quatro registros Mesh
+estavam desconectados. O core servido passa a valer também quando agentes desse
+servidor reconectarem; a implantação não é uma seleção de core por dispositivo.
+
+Hashes dos candidatos e backups e sintaxe JavaScript foram conferidos antes da
+troca. Depois, TLS/WSS autenticado, capacidades originais do relay e rejeição de
+bootstrap inexistente passaram. Configuração, unidade de serviço, meshagent.js
+do servidor e executáveis MeshService64 existentes permaneceram inalterados.
+Backend e banco não foram atualizados. O agente autorizado reconectou e anunciou
+outra identificação de core. Isso não comprova criação ou exibição do diálogo:
+REQUESTED/CREATE_FAILED/HELPER_CREATED ainda precisam ser observados numa nova
+tentativa autorizada, correlacionada pelo UUID.
+
+Registro sanitizado local: `.tools/native-consent-diagnostic-v2/deployment.json`.
+Candidatos, hashes e backups originais permanecem em
+`.tools/native-consent-diagnostic-v2/review/`, fora do Git. Nenhum instalador foi
+gerado ou executado. O estado permanece **diagnóstico nativo pendente**.
 
 ## Evidência e limite da conclusão
 
@@ -55,12 +79,12 @@ Esta preparação não implanta V10/V11, /trace, correções da interface ou o n
 contador de 60 segundos. Serve apenas para esclarecer a falha nativa. Não usar
 uma prova com servidor antigo para homologar a versão candidata completa.
 
-## Implantação pendente de autorização
+## Escopo autorizado e reversão
 
 O MeshCentral distribui o core JavaScript aos agentes conectados. Isso altera
 um componente executado nos Windows, mesmo sem novo EXE/instalador.
-Por isso a implantação deve ser autorizada explicitamente, conforme a restrição
-do operador; não é apenas uma mudança local na VM.
+Por isso a implantação exigiu autorização explícita, recebida nesta etapa;
+não é apenas uma mudança local na VM.
 
 Antes de aplicar: conferir os hashes live contra o manifesto, identificar os
 agentes conectados e confirmar o escopo autorizado; garantir ausência de sessões
