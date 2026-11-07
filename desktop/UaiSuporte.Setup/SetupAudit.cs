@@ -27,6 +27,12 @@ internal static class SetupAudit
             detail += $" {e.GetType().Name}:0x{e.HResult:X8}" + (e is System.ComponentModel.Win32Exception w ? $":WIN32={w.NativeErrorCode}" : e is HttpRequestException h ? $":HTTP={(int?)h.StatusCode}:NETWORK={h.HttpRequestError}" : "");
         return detail;
     }
+    // Keep the original error for sanitized diagnostics. Never copy its message
+    // into the user-facing explanation (it may contain a path or a secret).
+    internal static IOException UpgradeFailure(Exception cause, bool committed = false) => new(
+        committed
+            ? "Atualização concluída; limpeza anterior pendente de revisão pela TI."
+            : "Atualização não concluída. Cadastro preservado; consulte a TI.", cause);
     internal static string Explain(Exception error)
     {
         var root = error.GetBaseException();

@@ -219,6 +219,9 @@ internal static class Installation
         }
     }
     static void Upgrade(InstallState state,Action<string> report) {
+        string phase="CHECK_EXISTING";
+        void Stage(string name){phase=name;SetupAudit.Write("UPDATE_STAGE_"+name);}
+        Stage("CHECK_EXISTING");
         if(state.Product!="UaiSuporte-LAB-0.5.0")throw new IOException("Instalação de outro produto.");
         if(!state.CorporateService&&InteractiveOwner.Require()!=state.OwnerSid)throw new IOException("Migração exige a conta Windows que ativou o dispositivo.");
         SafePath(Root);SafePath(Provisioning.Storage);
@@ -229,26 +232,39 @@ internal static class Installation
         Directory.CreateDirectory(staged);
         try {
             report("Preparando atualização e preservando o cadastro…");
+            Stage("EXTRACT_APPLICATION");
             using(var payload=Assembly.GetExecutingAssembly().GetManifestResourceStream("app.zip")!)Policy.Extract(payload,staged);
             if(!File.Exists(Path.Combine(staged,"Service","UaiSuporte.Service.exe")))throw new IOException("Serviço ausente do pacote.");
+            Stage("BACKUP_INSTALLER");
             File.Copy(Installer,oldInstaller,false);
-            CorporateInstallation.Stop();CorporateInstallation.StopInterfaces();
-            if(legacy){if(Directory.Exists(DeviceStore.Root))throw new IOException("Migração anterior pendente.");migrated=true;DeviceStore.MigrateLegacy();}
+            Stage("STOP_SERVICE");CorporateInstallation.Stop();
+            Stage("STOP_INTERFACE");CorporateInstallation.StopInterfaces();
+            if(legacy){Stage("MIGRATE_IDENTITY");if(Directory.Exists(DeviceStore.Root))throw new IOException("Migração anterior pendente.");migrated=true;DeviceStore.MigrateLegacy();}
+            Stage("READ_DEVICE_CONFIGURATION");
             var meshPath=DeviceStore.Read<JsonElement>("setup.bin").GetProperty("meshExe").GetString()??throw new InvalidDataException();
+            Stage("VERIFY_MESH_HASH");
             if(!Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(meshPath))).Equals(Provisioning.MeshHash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Integridade do componente interno inválida.");
+            Stage("VERIFY_MESH_SIGNATURE");
             Authenticode.RequireValid(meshPath);
             Log("UPDATE_MESH_HASH_AND_SIGNATURE_OK");
+            Stage("SAVE_TRANSACTION");
             state.RollbackPending=true;Save(state);Log("UPDATE_BEGIN_IDENTITY_PRESERVED");
+            Stage("SWAP_APPLICATION");
             transaction.Swap();
-            WebView(report);CorporateInstallation.Manifest();CorporateInstallation.Register();
-            state.CorporateService=true;state.RollbackPending=false;Save(state);CorporateInstallation.Start();
+            Stage("VERIFY_WEBVIEW");WebView(report);
+            Stage("WRITE_MANIFEST");CorporateInstallation.Manifest();
+            Stage("REGISTER_SERVICE");CorporateInstallation.Register();
+            Stage("SAVE_UPDATED_STATE");state.CorporateService=true;state.RollbackPending=false;Save(state);
+            Stage("START_SERVICE");CorporateInstallation.Start();
             // Copy the matching integrated uninstaller only after the new service starts.
+            Stage("UPDATE_UNINSTALLER");
             File.Copy(Environment.ProcessPath!,Installer,true);RegisterUninstaller();
-            committed=true;transaction.Commit();File.Delete(oldInstaller);RemoveOwnedUserStartup();
+            Stage("COMMIT_CLEANUP");committed=true;transaction.Commit();File.Delete(oldInstaller);RemoveOwnedUserStartup();
             if(legacy){foreach(string file in new[]{"identity.bin","setup.bin","pending-enrollment.bin","account-registration.bin","activation-recovery.bin"})File.Delete(Path.Combine(DeviceStore.Legacy,file));DeleteTree(Path.Combine(DeviceStore.Legacy,"Mesh"));}
             Log("UPDATE_COMPLETE_IDENTITY_PRESERVED");
-        }catch{
-            if(committed){Log("UPDATE_COMMITTED_CLEANUP_PENDING");throw new IOException("Atualização concluída; limpeza anterior pendente de revisão pela TI.");}
+        }catch(Exception original){
+            SetupAudit.Write("UPDATE_STAGE_FAILED_"+phase,original);
+            if(committed){Log("UPDATE_COMMITTED_CLEANUP_PENDING");throw SetupAudit.UpgradeFailure(original,committed:true);}
             Log("UPDATE_FAILED_ROLLBACK_BEGIN");
             try{CorporateInstallation.Stop();if(legacy)CorporateInstallation.Remove();
                 transaction.Rollback();
@@ -256,8 +272,8 @@ internal static class Installation
                 if(migrated)DeleteTree(DeviceStore.Root);
                 state.CorporateService=!legacy;state.RollbackPending=false;Save(state);
                 if(!legacy)CorporateInstallation.Start();Log("UPDATE_ROLLBACK_COMPLETE");
-            }catch{state.RollbackPending=true;Save(state);Log("UPDATE_ROLLBACK_PENDING");}
-            throw new IOException("Atualização não concluída. Cadastro preservado; consulte a TI.");
+            }catch(Exception rollback){SetupAudit.Write("UPDATE_ROLLBACK_FAILED",rollback);state.RollbackPending=true;Save(state);Log("UPDATE_ROLLBACK_PENDING");}
+            throw SetupAudit.UpgradeFailure(original);
         }
     }
     public static async Task<string> CheckNetwork()

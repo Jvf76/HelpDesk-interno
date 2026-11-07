@@ -59,6 +59,18 @@ foreach (var error in new Exception[] {
     checks++;
 }
 if (!SetupAudit.ErrorCodes(new System.ComponentModel.Win32Exception(1314)).Contains("WIN32=1314")) throw new Exception("Missing native diagnostic"); checks++;
+// Regression: Upgrade previously discarded the original HRESULT after rollback.
+foreach(var cause in new Exception[]{
+    new IOException(secret,unchecked((int)0x80070070)),
+    new System.ComponentModel.Win32Exception(5,secret),
+    new System.Security.Cryptography.CryptographicException(secret)
+}) foreach(bool committed in new[]{false,true}) {
+    var failure=SetupAudit.UpgradeFailure(cause,committed);
+    if(!ReferenceEquals(failure.InnerException,cause))throw new Exception("Upgrade lost original failure");checks++;
+    var codes=SetupAudit.ErrorCodes(failure);
+    if(!codes.Contains(SetupAudit.ErrorCodes(cause)))throw new Exception("Upgrade lost original error codes");checks++;
+    if((codes+failure.Message+SetupAudit.Explain(failure)).Contains(secret))throw new Exception("Upgrade leaked original error text");checks++;
+}
 var authorization = new[]{"CA_ACCEPTED", "TERMS_ACCEPTED", "HOSTS_YES"};
 if (!InnoRequest.Validate(authorization)) throw new Exception("Hosts authorization lost"); checks++;
 var noHosts = (string[])authorization.Clone(); noHosts[2]="HOSTS_NO";
