@@ -60,18 +60,20 @@ try{for(const role of ['ADMIN','LEITURA']){
  const card=page.getByRole('heading',{name:'Atendimento remoto · '+device.public_code}).locator('..');
  assert.equal(await card.getByRole('combobox').count(),0);
  assert.equal(await card.getByRole('button',{name:'Solicitar consentimento'}).count(),0);
- await card.getByRole('button',{name:'Conectar',exact:true}).click();
+ assert.equal(await card.getByRole('button',{name:'Conectar',exact:true}).count(),0);
  await card.getByText('Aguardando consentimento no computador acessado',{exact:true}).waitFor();
  assert.equal(launches,0);sessionPhase='CONSENTED';
  await page.getByTitle('Atendimento remoto').waitFor();assert.equal(launches,1);
  assert.equal(await page.getByRole('button',{name:'Abrir visualizador',exact:true}).count(),0);
- await page.waitForTimeout(2200);assert.equal(launches,1);
+ sessionPhase='ACTIVE';await page.waitForTimeout(2200);assert.equal(launches,1);
+ assert.equal(await page.getByTitle('Atendimento remoto').count(),1);
+ assert.equal(calls.filter(x=>x==='/api/sessions/test-session/stop').length,0);
  await card.getByRole('button',{name:'Encerrar acesso',exact:true}).click();
  await page.getByTitle('Atendimento remoto').waitFor({state:'detached'});
  await card.getByRole('button',{name:'Fechar atendimento'}).click();checks+=8;
  // A late bootstrap must not reopen a viewer after local requester stop.
  sessionPhase='CONSENTED';await page.getByRole('button',{name:'Conectar',exact:true}).click();
- await card.getByRole('button',{name:'Conectar',exact:true}).click();await page.waitForTimeout(2500);
+ await page.waitForTimeout(2500);
  assert.equal(launches,2);assert(releaseLaunch);
  await card.getByRole('button',{name:'Encerrar acesso',exact:true}).click();releaseLaunch();
  await page.waitForTimeout(200);assert.equal(await page.getByTitle('Atendimento remoto').count(),0);

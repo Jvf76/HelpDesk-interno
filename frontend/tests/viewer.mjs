@@ -127,6 +127,10 @@ try {
     assert.doesNotMatch(await page.locator('#mode').innerText(),/Controle ativo/);
     await page.evaluate(()=>window.socket.onmessage({data:JSON.stringify({ctrlChannel:'102938',type:'metadata',uaiActiveUntil:Date.now()+60000})}));
     assert.equal(await page.locator('#state').innerText(),viewOnly?'Visualização ativa':'Controle ativo');
+    await page.evaluate(()=>window.socket.onmessage({data:new Uint8Array([0,11,0,12,0,2,0,1,0,2,0,1]).buffer}));
+    assert.equal(await page.locator('#monitor option').count(),2);
+    await page.selectOption('#monitor','2');
+    assert(await page.evaluate(()=>window.sent.some(x=>Array.isArray(x)&&x[1]===12&&x[5]===2)), 'monitor switch command missing');
     // Real adapter consumes the SDK RTT callback and sends the existing quality command.
     await page.evaluate(() => {
       for (let i=0;i<2;i++) window.socket.onmessage({data:JSON.stringify({ctrlChannel:102938,type:'rtt',time:Date.now()-400})});
