@@ -1,3 +1,4 @@
+import "./remote-session.css";
 import {recordSessionDiagnostic,sessionDiagnostic} from "./sessionDiagnostics";
 import { useEffect,useRef,useState } from "react";
 import { api,type RemoteSession } from "./api";
@@ -49,11 +50,11 @@ export function WebSession({code,csrf,onClose}:{code:string;csrf:string;onClose:
   else if(e.data.kind==="transport-close-other")recordSessionDiagnostic(id.current,"TRANSPORT_CLOSE_OTHER");
   else if(["stop","disconnected"].includes(e.data.kind))void stop(e.data.kind==="stop"?"VIEWER_STOP":"VIEWER_DISCONNECTED");
  };window.addEventListener("message",message);return()=>window.removeEventListener("message",message);},[]);
- return <section className="mon-card"><h2>Atendimento remoto · {code}</h2><p>O computador acessado precisa estar ativado e aceitar localmente. Este navegador somente controla a sessão.</p>{error&&<p role="alert">{error}</p>}
+ return <section className="mon-card remote-session"><div className="remote-session-heading"><div><span className="remote-session-kicker">ÁREA DE ATENDIMENTO</span><h2>Conexão remota</h2></div><span className="remote-session-device">Computador · {code}</span></div>{error&&<p role="alert">{error}</p>}
  {!session&&!error&&<p role="status">Solicitando conexão…</p>}
  {session&&<><p role="status">{sessionMessage(session)}</p><small>Tentativa: {session.id}</small></>}
- {bootstrap&&<iframe title="Atendimento remoto" ref={frame} src="/remote-viewer/index.html?v=20261109-fluid-monitors" sandbox="allow-scripts allow-same-origin" allow="fullscreen" onLoad={()=>frame.current?.contentWindow?.postMessage({uaiViewer:true,payload:{action:"start",...bootstrap}},location.origin)}/>}
- <button onClick={()=>void stop()}>Encerrar acesso</button><button onClick={()=>{void stop("USER_CLOSE");onClose();}}>Fechar atendimento</button>
+ {bootstrap&&<iframe title="Atendimento remoto" ref={frame} src="/remote-viewer/index.html?v=20261109-session-design" sandbox="allow-scripts allow-same-origin" allow="fullscreen" onLoad={()=>frame.current?.contentWindow?.postMessage({uaiViewer:true,payload:{action:"start",...bootstrap}},location.origin)}/>}
+ <div className="remote-session-actions"><button onClick={()=>void stop()}>Encerrar acesso</button><button onClick={()=>{void stop("USER_CLOSE");onClose();}}>Fechar atendimento</button>
  {session&&<button onClick={()=>void navigator.clipboard.writeText(sessionDiagnostic(id.current)).then(()=>setDiagnosticNotice("Diagnóstico copiado: somente UUID, horários e códigos de evento.")).catch(()=>setDiagnosticNotice("Não foi possível copiar o diagnóstico. Verifique a permissão de área de transferência do navegador."))}>Copiar diagnóstico</button>}
- {diagnosticNotice&&<p role="status">{diagnosticNotice}</p>}</section>;
+ </div>{diagnosticNotice&&<p role="status">{diagnosticNotice}</p>}</section>;
 }

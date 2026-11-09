@@ -57,7 +57,7 @@ try{for(const role of ['ADMIN','LEITURA']){
  await page.getByRole('img',{name:'CPU e memória RAM',exact:true}).waitFor();await page.getByRole('img',{name:'Espaço livre em disco',exact:true}).waitFor();assert(calls.some(x=>x.startsWith('/api/inventory/'+device.id+'/metrics?')));checks+=3;
  if(role==='ADMIN'){
  await page.getByRole('button',{name:'Conectar',exact:true}).click();
- const card=page.getByRole('heading',{name:'Atendimento remoto · '+device.public_code}).locator('..');
+ const card=page.locator('.remote-session');
  assert.equal(await card.getByRole('combobox').count(),0);
  assert.equal(await card.getByRole('button',{name:'Solicitar consentimento'}).count(),0);
  assert.equal(await card.getByRole('button',{name:'Conectar',exact:true}).count(),0);
