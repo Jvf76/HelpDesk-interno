@@ -15,7 +15,7 @@ test('KVM diagnostic preserves parsing, exposes only closed error codes and is i
  const tile=Buffer.from([0,3,0,10,0,0,0,0,255,217]);
  assert.equal(new Observer().feed(tile),true);
  // Reproduce a possible framing mismatch, not a capture from the real computer.
- assert.throws(()=>new Observer().feed(Buffer.concat([tile,Buffer.alloc(6)])),/KVM_LENGTH_BELOW_HEADER/);
+ assert.equal(new Observer().feed(Buffer.concat([tile,Buffer.alloc(6)])),true);
  assert(patched.includes("finish(s,'PROTOCOL_ERROR');return false;"));
  assert.throws(()=>patchKvmDiagnostics('unexpected upstream'),/Unexpected/);
 });

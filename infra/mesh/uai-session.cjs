@@ -110,10 +110,18 @@ class TileObserver {
         const command=this.header.readUInt16BE(jumbo?8:0);
         if(length<this.need)throw Error('KVM_LENGTH_BELOW_HEADER');
         if(length>32*1024*1024)throw Error('KVM_LENGTH_ABOVE_LIMIT');
+        this.packetLength=length;
         this.tile=command===3&&length>=(jumbo?16:8);this.remaining=length-this.have;
       }
       const take=Math.min(this.remaining,data.length-offset);offset+=take;this.remaining-=take;
-      if(this.remaining===0){complete=complete||this.tile;this.reset();}
+      if(this.remaining===0){
+        complete=complete||this.tile;
+        // Match the existing viewer: allocation alignment bytes are not another
+        // KVM command. Only skip the exact <=7 byte suffix at this message end.
+        const padding=(8-(this.packetLength%8))%8;
+        this.reset();
+        if(padding>0&&data.length-offset===padding)return complete;
+      }
     }
     return complete;
   }
