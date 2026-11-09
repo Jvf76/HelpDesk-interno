@@ -1,3 +1,4 @@
+// Uai bounded KVM diagnostics v1
 'use strict';
 // Uai Telecom: metadata and lease enforcement around the existing MeshCentral relay.
 // No image/input contents are retained. No cryptographic or desktop protocol replacement.
@@ -35,7 +36,7 @@ function finish(s, reason) {
     viewerAttached:!!s.relay,peerPaired:!!s.relay?.peer,viewerMessages:s.viewerMessages,
     agentMessages:s.agentMessages,protocolRequested:s.protocolRequested,
     nativeConsentRequested:s.nativeConsentRequested,nativeConsentGranted:!!s.consentAt,
-    privacyBar:s.privacy,firstFrame:!!s.startedAt}));
+    privacyBar:s.privacy,firstFrame:!!s.startedAt,kvmFailure:s.kvmFailure||null}));
 }
 function alive(s) {
   if (!s || s.state === 'ENDED') return false;
@@ -107,7 +108,8 @@ class TileObserver {
         if(this.need===4&&this.header.readUInt16BE(0)===27&&this.header.readUInt16BE(2)===8){this.need=12;continue;}
         const jumbo=this.need===12;const length=jumbo?8+this.header.readUInt32BE(4):this.header.readUInt16BE(2);
         const command=this.header.readUInt16BE(jumbo?8:0);
-        if(length<this.need||length>32*1024*1024)throw Error('Invalid KVM size');
+        if(length<this.need)throw Error('KVM_LENGTH_BELOW_HEADER');
+        if(length>32*1024*1024)throw Error('KVM_LENGTH_ABOVE_LIMIT');
         this.tile=command===3&&length>=(jumbo?16:8);this.remaining=length-this.have;
       }
       const take=Math.min(this.remaining,data.length-offset);offset+=take;this.remaining-=take;
@@ -165,7 +167,7 @@ function data(obj,packet){
   try{
     if(!obj.uaiTiles)obj.uaiTiles=new TileObserver();
     if(obj.uaiTiles.feed(b)){if(!s.tileAt){s.tileAt=now();s.startedAt=s.tileAt;transition(s,'AWAITING_RENDER');}}
-  }catch{finish(s,'PROTOCOL_ERROR');return false;}
+  }catch(e){s.kvmFailure=['KVM_LENGTH_BELOW_HEADER','KVM_LENGTH_ABOVE_LIMIT'].includes(e?.message)?e.message:'KVM_OBSERVER_EXCEPTION';finish(s,'PROTOCOL_ERROR');return false;}
   return true;
 }
 function probe(s) {
