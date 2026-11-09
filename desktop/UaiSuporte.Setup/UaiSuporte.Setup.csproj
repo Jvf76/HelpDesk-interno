@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms><EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
-    <AssemblyName>UaiSuporte.Setup</AssemblyName><Version>0.8.1</Version>
+    <AssemblyName>UaiSuporte.Setup</AssemblyName><Version>0.8.2</Version>
     <ApplicationIcon>../UaiSuporte.App/app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>

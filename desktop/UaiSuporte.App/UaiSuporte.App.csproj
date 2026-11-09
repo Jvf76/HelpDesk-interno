@@ -4,7 +4,7 @@
   <UseWindowsForms>true</UseWindowsForms><EnableWindowsTargeting>true</EnableWindowsTargeting>
   <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-  <AssemblyName>UaiSuporte</AssemblyName><Version>0.8.1</Version>
+  <AssemblyName>UaiSuporte</AssemblyName><Version>0.8.2</Version>
   <ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>app.ico</ApplicationIcon>
  </PropertyGroup>
  <ItemGroup>

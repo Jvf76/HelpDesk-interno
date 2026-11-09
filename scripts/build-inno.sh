@@ -5,9 +5,9 @@ repo="$PWD"
 : "${UAI_INNO_PAYLOAD:?Set UAI_INNO_PAYLOAD to the verified integrated payload directory}"
 : "${UAI_INNO_ISCC:?Set UAI_INNO_ISCC to the official ISCC.exe path}"
 : "${UAI_INNO_WINEPREFIX:?Set UAI_INNO_WINEPREFIX to the isolated compiler prefix}"
-output="$repo/dist/inno-081"
-[[ ! -e "$output/UaiSuporte-Setup-0.8.1-Lab.exe" ]] || { echo "Output exists; refusing overwrite" >&2; exit 1; }
-engine_dir="${UAI_INNO_ENGINE_DIR:-$repo/dist/inno-081-engine}"
+output="$repo/dist/inno-082"
+[[ ! -e "$output/UaiSuporte-Setup-0.8.2-Lab.exe" ]] || { echo "Output exists; refusing overwrite" >&2; exit 1; }
+engine_dir="${UAI_INNO_ENGINE_DIR:-$repo/dist/inno-082-engine}"
 mkdir -p "$output" "$engine_dir"
 "$repo/.tools/dotnet/dotnet" run --project desktop/Setup.Tests -- .tools/lab/exports/uai-lab-ca.cer
 "$repo/.tools/dotnet/dotnet" publish desktop/UaiSuporte.Setup -c Release -r win-x64 --self-contained true \
@@ -20,5 +20,5 @@ engine_win="$(winepath -w "$engine")"
 output_win="$(winepath -w "$output")"
 script_win="$(winepath -w "$repo/desktop/installer-inno/UaiSuporte.iss")"
 wine "$UAI_INNO_ISCC" "/DEnginePath=$engine_win" "/DEngineHash=$engine_hash" "/DOutputPath=$output_win" "$script_win"
-sha256sum "$output/UaiSuporte-Setup-0.8.1-Lab.exe" > "$output/SHA256SUMS.txt"
+sha256sum "$output/UaiSuporte-Setup-0.8.2-Lab.exe" > "$output/SHA256SUMS.txt"
 cat "$output/SHA256SUMS.txt"

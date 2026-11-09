@@ -38,7 +38,7 @@ internal static class InnoBridge
             if ((File.GetAttributes(request) & FileAttributes.ReparsePoint) != 0 || new FileInfo(request).Length > 512) return 10;
             var lines = File.ReadAllLines(request); File.Delete(request);
             bool configureHosts = InnoRequest.Validate(lines);
-            SetupAudit.Write("INNO_INSTALL_BEGIN_0.8.1");
+            SetupAudit.Write("INNO_INSTALL_BEGIN_0.8.2");
             Installation.Install(configureHosts, _ => { });
             Array.Clear(lines);
             SetupAudit.Write("INNO_INSTALL_OK");

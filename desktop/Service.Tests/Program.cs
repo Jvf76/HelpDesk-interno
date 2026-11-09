@@ -52,7 +52,67 @@ for(int expiresAt=1;expiresAt<=4;expiresAt++){
   if(expiresAt<4)Check(!fake.Events.Contains("resume"),"stale session never resumes suspended engine");
  }
 }
+// Regression model of Windows' documented privilege-gated token handle rights.
+// This models the contract; it does not execute SetTokenInformation on Linux.
+var oldOrder=new FakeTokenOperations();oldOrder.DuplicatePrimary();oldOrder.EnableCallerPrivileges();
+try{oldOrder.SetSession(1);throw new Exception("legacy ordering unexpectedly worked");}
+catch(System.ComponentModel.Win32Exception e){Check(e.NativeErrorCode==5,"legacy duplicate-before-enable reproduces missing session right in model");}
+finally{oldOrder.RestoreCallerPrivileges();oldOrder.DiscardPrimary();}
+var incompleteAccess=new FakeTokenOperations(true,false){Access=0x10b};
+try{InteractiveTokenPolicy.Prepare(1,incompleteAccess);throw new Exception("incomplete adjustment access accepted");}
+catch(System.ComponentModel.Win32Exception e){Check(e.NativeErrorCode==5&&incompleteAccess.Discarded,"legacy access lacks default adjustment even with TCB already enabled in compatibility model");}
+Check((InteractiveTokenPolicy.PrimaryTokenAccess&0x180)==0x180,"combined default/session access requested");
+Check((InteractiveTokenPolicy.PrimaryTokenAccess&0xfffe0000)==0,"no maximum allowed, ACL or owner write rights requested");
+foreach(bool tcb in new[]{false,true})foreach(bool primary in new[]{false,true}){
+ var native=new FakeTokenOperations(tcb,primary);InteractiveTokenPolicy.Prepare(1,native);
+ Check(native.SessionId==1&&!native.Discarded,"prepared primary belongs to requested session");
+ Check(native.CallerTcb==tcb&&native.CallerPrimary==primary,"caller privilege state restored exactly");
+ Check(native.CopyTcb==tcb&&native.CopyPrimary==primary,"temporary privilege enables not inherited by engine");
+ Check(native.Events.IndexOf("enable-primary")<native.Events.IndexOf("duplicate"),"rights requested only after caller privileges enabled");
+ Check(native.Events.IndexOf("restore-copy")<native.Events.IndexOf("set-session"),"caller performs session adjustment without extra privilege enabled in child");
+ Check(native.Events.IndexOf("get-session")<native.Events.IndexOf("restore-caller"),"session verified before releasing caller privilege scope");
+}
+foreach(string failAt in new[]{"enable-tcb","enable-primary","duplicate","restore-copy","set-session","get-session","restore-caller"}){
+ var native=new FakeTokenOperations{FailAt=failAt};
+ try{InteractiveTokenPolicy.Prepare(1,native);throw new Exception("failed token preparation accepted");}
+ catch(IOException){
+  Check(native.Discarded&&native.Events.Last()=="discard","failure never returns a usable primary token");
+  Check(native.Events.Contains("restore-caller"),"caller restoration attempted even after partial enable");
+  if(failAt!="restore-caller")Check(!native.CallerTcb&&!native.CallerPrimary,"caller privileges restored after native failure");
+ }
+}
+var mismatched=new FakeTokenOperations{WrongSession=true};
+try{InteractiveTokenPolicy.Prepare(1,mismatched);throw new Exception("wrong token session accepted");}
+catch(InvalidOperationException){Check(mismatched.Discarded&&!mismatched.CallerTcb&&!mismatched.CallerPrimary,"wrong-session token discarded and caller restored");}
+foreach(int invalidSession in new[]{0,-1}){
+ var native=new FakeTokenOperations();
+ try{InteractiveTokenPolicy.Prepare(invalidSession,native);throw new Exception("invalid token session accepted");}
+ catch(InvalidOperationException){Check(native.Events.Count==0,"invalid session rejected before touching privileges");}
+}
 Console.WriteLine($"{count} service policy checks passed. No Windows SCM, pipes/ACL, DPAPI, UI or Mesh capture executed.");
+
+sealed class FakeTokenOperations:IInteractiveTokenOperations {
+ readonly bool originalTcb,originalPrimary;
+ public FakeTokenOperations(bool originalTcb=false,bool originalPrimary=false){this.originalTcb=originalTcb;this.originalPrimary=originalPrimary;CallerTcb=originalTcb;CallerPrimary=originalPrimary;}
+ public List<string> Events {get;}=[];
+ public string? FailAt {get;init;}
+ public bool WrongSession {get;init;}
+ public uint Access {get;init;}=InteractiveTokenPolicy.PrimaryTokenAccess;
+ public bool CallerTcb {get;private set;}
+ public bool CallerPrimary {get;private set;}
+ public bool CopyTcb {get;private set;}
+ public bool CopyPrimary {get;private set;}
+ public bool Discarded {get;private set;}
+ bool sessionRight;int actualSession;
+ void Event(string name){Events.Add(name);if(FailAt==name)throw new IOException("injected native failure");}
+ public void EnableCallerPrivileges(){Event("enable-tcb");CallerTcb=true;Event("enable-primary");CallerPrimary=true;}
+ public void DuplicatePrimary(){Event("duplicate");sessionRight=CallerTcb&&(Access&0x180)==0x180;CopyTcb=CallerTcb;CopyPrimary=CallerPrimary;}
+ public void RestorePrimaryPrivileges(){Event("restore-copy");CopyTcb=originalTcb;CopyPrimary=originalPrimary;}
+ public void SetSession(int session){Event("set-session");if(!sessionRight||!CallerTcb)throw new System.ComponentModel.Win32Exception(5);actualSession=WrongSession?0:session;}
+ public int SessionId{get{Event("get-session");return actualSession;}}
+ public void RestoreCallerPrivileges(){Event("restore-caller");CallerTcb=originalTcb;CallerPrimary=originalPrimary;}
+ public void DiscardPrimary(){Event("discard");Discarded=true;}
+}
 
 sealed class FakeMeshLaunch:ISuspendedMeshLaunch {
  public List<string> Events {get;}=[];

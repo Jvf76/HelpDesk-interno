@@ -42,7 +42,7 @@ sealed class ServiceRuntime:IDisposable {
    int session=LocalChannel.ActiveSession(),presenter=lease.Pid;
    bool Authorized()=>!offPending&&bound&&lease.Pid==presenter&&lease.Live(presenter,Environment.TickCount64)&&LocalChannel.PresenterCurrent(presenter)&&LocalChannel.ActiveSession()==session;
    try{mesh.StartInteractive(setup.MeshExe,setup.MeshSha256,session,Authorized);}
-   catch(MeshLaunchException e){Log("MOTOR_START_FAILED "+JsonSerializer.Serialize(new{stage=e.Stage,win32Code=e.NativeErrorCode,targetSession=session}));throw;}
+   catch(MeshLaunchException e){Log("MOTOR_START_FAILED "+JsonSerializer.Serialize(new{stage=e.Stage,win32Code=e.NativeErrorCode,targetSession=session,requestedTokenAccess=e.RequestedTokenAccess,tcbInitiallyEnabled=e.CallerTcbInitiallyEnabled,primaryInitiallyEnabled=e.CallerPrimaryInitiallyEnabled}));throw;}
    Log("MOTOR_STARTED");Log("MOTOR_PLACEMENT "+JsonSerializer.Serialize(new{enginePid=mesh.ProcessId,engineSession=mesh.SessionId,activeSession=session,killOnJobClose=true}));
   }}
   if(due){
