@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 const destination=new URL('../public/remote-viewer/',import.meta.url);
 fs.mkdirSync(destination,{recursive:true});
 fs.cpSync(new URL('../../desktop/UaiSuporte.App/Viewer/',import.meta.url),destination,{recursive:true});
@@ -9,3 +10,9 @@ const listeners=[];
 window.chrome={webview:{addEventListener:(kind,fn)=>{if(kind==='message')listeners.push(fn);},postMessage:data=>parent.postMessage({uaiViewer:true,kind:data.kind},location.origin)}};
 window.addEventListener('message',event=>{if(event.source!==parent||event.origin!==location.origin||!event.data?.uaiViewer)return;const data=event.data.payload;if(data?.action!=='start'&&data?.action!=='stop')return;listeners.forEach(fn=>fn({data}));});
 `);
+// The web viewer uses stable paths; version its scripts/styles to avoid mixing
+// a new React controller with an older cached adapter. Desktop assets stay local.
+html=fs.readFileSync(index,'utf8').replace(/(src|href)="([^"?]+\.(?:js|css))"/g,(_,attribute,file)=>{
+ const hash=createHash('sha256').update(fs.readFileSync(new URL(file,destination))).digest('hex').slice(0,16);
+ return `${attribute}="${file}?v=${hash}"`;
+});fs.writeFileSync(index,html);

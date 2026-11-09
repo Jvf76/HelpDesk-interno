@@ -1,1 +1,3 @@
 body{font-family:Segoe UI,sans-serif;background:#112335;color:#fff;margin:0}header{padding:14px;display:flex;gap:24px;align-items:center}button{margin-left:auto;background:#a52a24;color:white;border:0;padding:10px;cursor:pointer}#screen{overflow:auto;height:calc(100vh - 110px)}canvas{display:block;max-width:100%;height:auto}p{margin:10px 14px}
+
+html:fullscreen{background:#112335;overflow:auto}header{flex-wrap:wrap;gap:12px}#fullscreen,#refresh-monitors{background:#245c85;margin-left:0}#fullscreen-status{font-size:12px}#screen{height:calc(100vh - 160px)}

@@ -19,7 +19,7 @@ window.chrome.webview.addEventListener('message',({data})=>{
  desktop.m.CompressionLevel=quality.profile.jpeg;desktop.m.ScalingLevel=quality.profile.scale;desktop.m.FrameRateTimer=quality.profile.interval;
  desktop.latency.callback=ms=>{if(desktop)quality.sample(ms,desktop.socket?.bufferedAmount||0,desktop.m.PendingOperations.length);};
  const activeDesktop=desktop;
- UaiMonitors.attach(desktop,()=>desktop===activeDesktop&&activeDeadlineSet&&Date.now()<activeUntil);
+ const monitorControls=UaiMonitors.attach(desktop,()=>desktop===activeDesktop&&activeDeadlineSet&&Date.now()<activeUntil,send);
  const ctx=desktop.m.Canvas,draw=CanvasRenderingContext2D.prototype.drawImage.bind(ctx);
  function inputReady(){return desktop===activeDesktop&&painted&&activeDeadlineSet&&Date.now()<activeUntil&&!data.viewOnly;}
  // The SDK also emits key-up packets on screen-size messages. Gate its wire send,
@@ -64,7 +64,7 @@ window.chrome.webview.addEventListener('message',({data})=>{
   if(desktop!==activeDesktop||!painted||activeDeadlineSet||!Number.isSafeInteger(metadata.uaiActiveUntil)||metadata.uaiActiveUntil<=Date.now()||metadata.uaiActiveUntil>data.expiresAt)return;
   // Only the relay issues this acknowledgment after native consent, privacy bar and render.
   activeDeadlineSet=true;activeUntil=metadata.uaiActiveUntil;
-  desktop.m.GetDisplayNumbers();
+  monitorControls.refresh();
   clearTimeout(connectionTimer);clearTimeout(expiry);expiry=setTimeout(()=>stop(),activeUntil-Date.now());
   desktop.m.stopInput=data.viewOnly;
   if(!data.viewOnly)desktop.m.GrabMouseInput();
@@ -100,7 +100,7 @@ window.chrome.webview.addEventListener('message',({data})=>{
 
  connectionDeadline(15000);
  expiry=setTimeout(()=>stop(),Math.max(0,data.expiresAt-Date.now()));
- watch=setInterval(()=>{document.getElementById('metrics').textContent=quality.status();},1000);
+ watch=setInterval(()=>{monitorControls.update();document.getElementById('metrics').textContent=quality.status();},1000);
 });
 
 document.getElementById('quality').onchange=e=>quality?.select(e.target.value);

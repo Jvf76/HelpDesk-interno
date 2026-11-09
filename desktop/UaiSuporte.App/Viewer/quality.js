@@ -3,7 +3,8 @@
 (function (root) {
   const profiles = Object.freeze({
     economy: Object.freeze({ label: 'Economia', jpeg: 30, scale: 640, interval: 200 }),
-    balanced: Object.freeze({ label: 'Equilibrada', jpeg: 50, scale: 1024, interval: 100 }),
+    balanced: Object.freeze({ label: 'Equilibrada', jpeg: 50, scale: 1024, interval: 50 }),
+    fluid: Object.freeze({ label: 'Fluidez', jpeg: 45, scale: 1024, interval: 33 }),
     clarity: Object.freeze({ label: 'Nitidez', jpeg: 75, scale: 1024, interval: 100 }),
   });
   function create({ apply, now = () => performance.now() }) {
@@ -30,7 +31,7 @@
         good = !congested && rtt < 120 && bufferedBytes < 8192 && pendingTiles < 2 ? good + 1 : 0;
         if (now() - lastChange < 20000) return;
         if (poor >= 2) change('economy');
-        else if (good >= 3) change('balanced');
+        else if (good >= 3) change(current === 'economy' ? 'balanced' : 'fluid');
       },
       status() {
         const fresh = measuredAt !== null && now() - measuredAt < 25000;

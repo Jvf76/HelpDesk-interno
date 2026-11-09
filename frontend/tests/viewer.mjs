@@ -57,6 +57,11 @@ try {
       window.addEventListener('message',e=>{if(e.origin===location.origin&&e.data?.uaiViewer&&e.data.kind)window.events.push(e.data);});
     });
     await page.goto("https://mesh.internal/uai-viewer/index.html");
+    await page.click('#fullscreen');
+    await page.waitForFunction(()=>!!document.fullscreenElement);
+    assert.equal(await page.locator('#fullscreen').textContent(),'Sair da tela cheia');
+    await page.click('#fullscreen');
+    await page.waitForFunction(()=>!document.fullscreenElement);
     if(web)await page.evaluate(()=>{window.deliver=({data})=>window.postMessage({uaiViewer:true,payload:data},location.origin);});
     await page.evaluate(
       (viewOnly) =>
@@ -129,6 +134,9 @@ try {
     assert.equal(await page.locator('#state').innerText(),viewOnly?'Visualização ativa':'Controle ativo');
     await page.evaluate(()=>window.socket.onmessage({data:new Uint8Array([0,11,0,12,0,2,0,1,0,2,0,1]).buffer}));
     assert.equal(await page.locator('#monitor option').count(),2);
+    assert.match(await page.locator('#monitor-status').innerText(),/2 monitores/);
+    await page.getByRole('button',{name:'Atualizar monitores'}).click();
+    assert(await page.evaluate(()=>window.sent.some(x=>Array.isArray(x)&&x[1]===11)), 'monitor query missing');
     await page.selectOption('#monitor','2');
     assert(await page.evaluate(()=>window.sent.some(x=>Array.isArray(x)&&x[1]===12&&x[5]===2)), 'monitor switch command missing');
     // Real adapter consumes the SDK RTT callback and sends the existing quality command.
@@ -136,6 +144,8 @@ try {
       for (let i=0;i<2;i++) window.socket.onmessage({data:JSON.stringify({ctrlChannel:102938,type:'rtt',time:Date.now()-400})});
     });
     await page.waitForFunction(() => document.getElementById('metrics').textContent.includes('Economia'));
+    await page.selectOption('#quality', 'fluid');
+    assert(await page.evaluate(()=>window.sent.some(x=>Array.isArray(x)&&x[1]===5&&x[5]===45&&x[8]===0&&x[9]===33)), 'fluid capture interval missing');
     await page.selectOption('#quality', 'clarity');
     assert(await page.evaluate(() => window.sent.some(x => Array.isArray(x) && x[1]===5 && x[5]===75)), 'quality command missing');
     const before = await page.evaluate(() => window.sent.length);

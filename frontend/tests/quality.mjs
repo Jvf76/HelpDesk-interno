@@ -22,3 +22,11 @@ test('manual profile is bounded and queue congestion reduces automatic quality',
   q.select('auto'); q.sample(10, 0, 10); q.sample(10, 0, 10);
   assert.equal(q.profile.jpeg, 50, 'cooldown still applies after manual change');
 });
+test('fluid profile and healthy automatic path use bounded shorter capture intervals',()=>{
+ let time=0;const q=create({apply:()=>{},now:()=>time});assert.equal(q.profile.interval,50);
+ for(let i=0;i<3;i++)q.sample(40,0,0);assert.equal(q.profile.interval,33);
+ time=21000;q.sample(500);q.sample(500);assert.equal(q.profile.interval,200);
+ q.select('fluid');assert.equal(q.profile.interval,33);assert.equal(q.profile.jpeg,45);
+ q.sample(1000);assert.equal(q.profile.interval,33,'explicit profile remains explicit');
+ for(const p of Object.values(globalThis.UaiQuality.profiles)){assert(p.interval>=20&&p.interval<=5000);assert(p.jpeg>0&&p.jpeg<=100);}
+});

@@ -40,6 +40,7 @@ export function WebSession({code,csrf,onClose}:{code:string;csrf:string;onClose:
  useEffect(()=>{const message=(e:MessageEvent)=>{if(e.origin!==location.origin||e.source!==frame.current?.contentWindow||!e.data?.uaiViewer)return;
   if(e.data.kind==="engine-consent-timeout"){setError("A confirmação no computador acessado expirou. Solicite uma nova tentativa.");void stop("NATIVE_TIMEOUT");}
   else if(e.data.kind==="connection-timeout"){setError("A etapa de conexão excedeu o prazo. Consulte o diagnóstico desta tentativa.");void stop("VIEWER_TIMEOUT");}
+  else if(['monitors-requested','monitors-empty','monitors-single','monitors-multiple','monitor-selected'].includes(e.data.kind))recordSessionDiagnostic(id.current,e.data.kind.replaceAll('-','_').toUpperCase());
   else if(e.data.kind==="frame")recordSessionDiagnostic(id.current,"FRAME_DRAWN");
   else if(e.data.kind==="viewer-error"){setError("O controlador encontrou uma falha local. Consulte o diagnóstico desta tentativa.");void stop("VIEWER_ERROR");}
   else if(e.data.kind==="transport-error")recordSessionDiagnostic(id.current,"TRANSPORT_ERROR");
@@ -51,7 +52,7 @@ export function WebSession({code,csrf,onClose}:{code:string;csrf:string;onClose:
  return <section className="mon-card"><h2>Atendimento remoto · {code}</h2><p>O computador acessado precisa estar ativado e aceitar localmente. Este navegador somente controla a sessão.</p>{error&&<p role="alert">{error}</p>}
  {!session&&!error&&<p role="status">Solicitando conexão…</p>}
  {session&&<><p role="status">{sessionMessage(session)}</p><small>Tentativa: {session.id}</small></>}
- {bootstrap&&<iframe title="Atendimento remoto" ref={frame} src="/remote-viewer/index.html" sandbox="allow-scripts allow-same-origin" allow="fullscreen" onLoad={()=>frame.current?.contentWindow?.postMessage({uaiViewer:true,payload:{action:"start",...bootstrap}},location.origin)}/>}
+ {bootstrap&&<iframe title="Atendimento remoto" ref={frame} src="/remote-viewer/index.html?v=20261109-fluid-monitors" sandbox="allow-scripts allow-same-origin" allow="fullscreen" onLoad={()=>frame.current?.contentWindow?.postMessage({uaiViewer:true,payload:{action:"start",...bootstrap}},location.origin)}/>}
  <button onClick={()=>void stop()}>Encerrar acesso</button><button onClick={()=>{void stop("USER_CLOSE");onClose();}}>Fechar atendimento</button>
  {session&&<button onClick={()=>void navigator.clipboard.writeText(sessionDiagnostic(id.current)).then(()=>setDiagnosticNotice("Diagnóstico copiado: somente UUID, horários e códigos de evento.")).catch(()=>setDiagnosticNotice("Não foi possível copiar o diagnóstico. Verifique a permissão de área de transferência do navegador."))}>Copiar diagnóstico</button>}
  {diagnosticNotice&&<p role="status">{diagnosticNotice}</p>}</section>;
