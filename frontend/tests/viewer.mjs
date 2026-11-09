@@ -180,6 +180,14 @@ try {
     assert.equal(await page.evaluate(()=>window.socket.closed),true,'native consent must remain bounded');
     assert.match(await page.locator('#state').innerText(),/confirmação.*expirou/);
     assert(await page.evaluate(()=>window.events.some(e=>e.kind==='engine-consent-timeout')));
+    for(const [code,kind] of [[1000,'transport-close-normal'],[1006,'transport-close-abnormal'],[1008,'transport-close-other']]){
+      await page.evaluate(code=>window.deliver({data:{action:'start',authCookie:'simulated-close-'+code,viewOnly:true,expiresAt:Date.now()+60000}}),code);
+      await page.waitForFunction(code=>window.socketUrl.includes('simulated-close-'+code),code);
+      await page.evaluate(code=>window.socket.onclose({code,reason:'SECRET-NOT-FOR-DIAGNOSTICS'}),code);
+      await page.waitForFunction(kind=>window.events.some(e=>e.kind===kind),kind);
+      assert(!(await page.evaluate(()=>JSON.stringify(window.events))).includes('SECRET-NOT-FOR-DIAGNOSTICS'));
+      assert.equal(await page.evaluate(()=>window.socket.closed),true);
+    }
     assert.deepEqual(errors, []);
     await page.close();
   }

@@ -1,6 +1,7 @@
 // Local adapter around MeshCentral's existing codec and input implementation.
 var urlargs={};let desktop=null,expiry=null,connectionTimer=null,watch=null,painted=false,quality=null,nativePromptSeen=false,activeDeadlineSet=false,activeUntil=0;
 const send=(kind)=>window.chrome.webview.postMessage({kind});
+window.addEventListener('error',()=>{send('viewer-error');stop(false);});
 function stop(notify=true){activeDeadlineSet=false;activeUntil=0;document.getElementById('mode').textContent='Entrada bloqueada';clearTimeout(expiry);clearTimeout(connectionTimer);clearInterval(watch);if(desktop){const d=desktop;desktop=null;clearInterval(d.latency.lastSend);d.latency.lastSend=null;d.latency.callback=null;d.m.stopInput=true;d.m.UnGrabKeyInput();d.m.UnGrabMouseInput();d.Stop();}const c=document.getElementById('Desk');c.getContext('2d').clearRect(0,0,c.width,c.height);document.getElementById('state').textContent='Sessão encerrada • imagem e controle desativados';if(notify)send('stop');}
 document.getElementById('stop').onclick=()=>stop();
 window.addEventListener('beforeunload',()=>stop(false));
@@ -91,6 +92,12 @@ window.chrome.webview.addEventListener('message',({data})=>{
 
  if(data.viewOnly){desktop.m.SendKeyMsgKC=()=>{};desktop.m.SendMouseMsg=()=>{};}
  desktop.Start(null);
+ const socket=desktop.socket,originalClose=socket?.onclose;
+ if(socket)socket.onclose=function(e){
+  send(e?.code===1000?'transport-close-normal':e?.code===1006?'transport-close-abnormal':'transport-close-other');
+  originalClose?.call(this,e);
+ };
+
  connectionDeadline(15000);
  expiry=setTimeout(()=>stop(),Math.max(0,data.expiresAt-Date.now()));
  watch=setInterval(()=>{document.getElementById('metrics').textContent=quality.status();},1000);

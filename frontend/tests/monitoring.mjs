@@ -17,10 +17,10 @@ try{for(const role of ['ADMIN','LEITURA']){
   else if(url.pathname==='/api/monitoring/series')body={points:Array.from({length:6},(_,i)=>({observed_at:new Date(Date.now()-(5-i)*600000).toISOString(),online:1+i,offline:25-i,cpu_pct:20+i*4,memory_pct:45+i*2})),resolution:'sample',truncated:false};
   else if(url.pathname==='/api/activation-tokens'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');assert.equal(route.request().postDataJSON().recoverDeviceId,device.id);body={id:'test-token',token:'TEST-FIXTURE-NOT-A-REAL-TOKEN'};}
 
-  else if(url.pathname==='/api/connections'&&method==='POST'){assert.equal(role,'ADMIN');assert.deepEqual(route.request().postDataJSON(),{code:device.public_code,mode:'CONTROL'});body={id:'test-session',status:'PENDING',mode:'CONTROL'};}
-  else if(url.pathname==='/api/sessions/test-session/stop')body={id:'test-session',status:'ENDED',ended_at:new Date().toISOString()};
-  else if(url.pathname==='/api/sessions/test-session/launch'){launches++;assert.equal(sessionPhase,'CONSENTED');sessionPhase='READY';if(launches===2)await new Promise(resolve=>releaseLaunch=resolve);body={authCookie:'fixture-only',viewOnly:false,expiresAt:Date.now()+60000};}
-  else if(url.pathname==='/api/sessions/test-session')body={id:'test-session',status:sessionPhase,mode:'CONTROL'};
+  else if(url.pathname==='/api/connections'&&method==='POST'){assert.equal(role,'ADMIN');assert.deepEqual(route.request().postDataJSON(),{code:device.public_code,mode:'CONTROL'});body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:'PENDING',mode:'CONTROL'};}
+  else if(url.pathname==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4/stop')body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:'ENDED',ended_at:new Date().toISOString()};
+  else if(url.pathname==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4/launch'){launches++;assert.equal(sessionPhase,'CONSENTED');sessionPhase='READY';if(launches===2)await new Promise(resolve=>releaseLaunch=resolve);body={authCookie:'fixture-only',viewOnly:false,expiresAt:Date.now()+60000};}
+  else if(url.pathname==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4')body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:sessionPhase,mode:'CONTROL'};
   else if(url.pathname==='/api/users' ||url.pathname.endsWith('/permissions'))body=[];
   else throw new Error('Unexpected endpoint '+url.pathname);
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
@@ -67,7 +67,10 @@ try{for(const role of ['ADMIN','LEITURA']){
  assert.equal(await page.getByRole('button',{name:'Abrir visualizador',exact:true}).count(),0);
  sessionPhase='ACTIVE';await page.waitForTimeout(2200);assert.equal(launches,1);
  assert.equal(await page.getByTitle('Atendimento remoto').count(),1);
- assert.equal(calls.filter(x=>x==='/api/sessions/test-session/stop').length,0);
+ assert.equal(calls.filter(x=>x==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4/stop').length,0);
+ await card.getByRole('button',{name:'Copiar diagnóstico',exact:true}).click();
+ const diagnostic=JSON.parse(await page.evaluate(()=>navigator.clipboard.readText()));
+ assert(diagnostic.events.some(e=>e.code==='LAUNCH_OK'));assert(!JSON.stringify(diagnostic).includes('fixture-only'));checks+=2;
  await card.getByRole('button',{name:'Encerrar acesso',exact:true}).click();
  await page.getByTitle('Atendimento remoto').waitFor({state:'detached'});
  await card.getByRole('button',{name:'Fechar atendimento'}).click();checks+=8;
