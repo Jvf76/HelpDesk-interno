@@ -1363,3 +1363,108 @@
   .monitor .dash-operations .dash-inventory td { padding: 0; }
   .dash-operations .dash-inventory-heading { padding: 18px; }
 }
+
+/* Signature overview: availability instrument + graphite monitoring canvas. */
+.monitor:has(.dash-signature) main { padding: 28px 32px; }
+.monitor .dash-signature h1 { font-size: 36px; letter-spacing: -.035em; }
+.dash-signature .dash-monitor-grid {
+  grid-template-columns: 290px minmax(0,1fr);
+  grid-template-areas: 'availability performance' 'attention inventory';
+  gap: 24px; align-items: stretch;
+}
+.dash-availability { grid-area: availability; padding: 24px; background: var(--dash-surface); border: 1px solid var(--dash-line); border-radius: 16px; min-width: 0; }
+.monitor .dash-availability>p { font-size: 12px; }
+.dash-availability-visual { position: relative; margin: 18px auto 4px; max-width: 270px; }
+.dash-availability-visual svg { display: block; width: 100%; overflow: visible; }
+.dash-availability-visual path { fill: none; stroke-width: 12; }
+.dash-availability-track { stroke: var(--dash-line); }
+.dash-availability-fill { stroke: var(--dash-good); }
+.dash-availability-visual>div { position: absolute; top: 43%; width: 100%; text-align: center; }
+.dash-availability-visual strong { font-size: 40px; font-weight: 550; letter-spacing: -.04em; line-height: 1.2; display: block; }
+.dash-availability-visual span { color: var(--dash-muted); font-size: 12px; }
+.dash-signature .dash-stats { border: 0; background: transparent; padding: 0; margin: 10px 0 0; grid-template-columns: 1fr 1fr; gap: 0; }
+.dash-signature .dash-stat { padding: 12px 0; border: 0; border-bottom: 1px solid var(--dash-line); border-radius: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 3px 8px; }
+.dash-signature .dash-stat-total { grid-column: 1/-1; }
+.dash-signature .dash-stat:not(:first-child) { display: block; }
+.dash-signature .dash-stat:nth-child(2),.dash-signature .dash-stat:nth-child(4) { padding-right: 8px; }
+.dash-signature .dash-stat:last-child { grid-column: auto; border-bottom: 1px solid var(--dash-line); }
+.dash-signature .dash-stat strong { font-size: 25px; margin: 0; }
+.dash-signature .dash-stat small { display: none; }
+.monitor .dash-signature .dash-availability-note { margin-top: 12px; font-size: 11px; }
+.dash-signature .dash-performance {
+  --dash-surface: #192630; --dash-soft: #22323e; --dash-text: #f0f5f8;
+  --dash-muted: #b4c4cf; --dash-line: #344653; --dash-hover: #2c414e;
+  --dash-cpu: #83e0cf; --dash-memory: #d2b5ff; --dash-warning: #f1c875;
+  --dash-focus: #83e0cf;
+  background: #192630; color: var(--dash-text); border: 0; padding: 26px 28px; border-radius: 16px;
+}
+.monitor[data-theme=dark] .dash-signature .dash-performance { background: #192630; }
+.dash-signature .dash-performance .dash-monitor-heading { margin-bottom: 18px; }
+.monitor .dash-signature .dash-performance h2 { font-size: 20px; font-weight: 550; }
+.monitor .dash-signature .dash-performance select { color-scheme: dark; background: #22323e; border-color: #435561; min-height: 40px; }
+.dash-signature .dash-resources { margin: 12px 0 0; gap: 36px; }
+.dash-signature .dash-resources strong { font-size: 38px; }
+.dash-signature .dash-legend { margin-top: 0; }
+.dash-signature .dash-chart svg { max-height: 290px; }
+.dash-signature .dash-chart line { stroke-dasharray: 2 6; }
+.dash-signature .dash-chart path.dash-area { stroke: none; fill-opacity: .09; }
+.dash-signature .dash-area-cpu_pct { fill: var(--dash-cpu); }
+.dash-signature .dash-area-memory_pct { fill: var(--dash-memory); }
+.dash-signature .dash-chart-data { border-top: 1px solid var(--dash-line); margin-top: 12px; }
+.dash-signature .dash-chart-data summary { font-size: 12px; }
+.dash-signature .dash-attention { padding: 22px; border: 1px solid var(--dash-line); border-radius: 16px; background: var(--dash-surface); }
+.dash-signature .dash-attention-title { align-items: flex-start; }
+.dash-signature .dash-pressure { margin-top: 6px; }
+.dash-signature .dash-pressure-item { padding: 12px 0; }
+.dash-signature .dash-storage li button { padding: 10px 0; }
+.dash-signature .dash-storage li small { font-size: 11px; }
+.dash-signature .dash-inventory { align-self: start; border-radius: 16px; }
+.dash-signature .dash-inventory-heading { padding: 24px; }
+.monitor .dash-signature .dash-inventory h2 { font-size: 20px; }
+.monitor .dash-signature .dash-inventory td { padding: 17px 12px; }
+.monitor .dash-signature .dash-device-name { font-size: 13px; }
+.dash-signature .dash-state { padding: 4px 7px; background: var(--dash-soft); }
+.dash-signature .dash-table-foot { padding: 18px 24px; }
+.monitor.uai-shell:has(.dash-signature) .mon-sidebar { width: 208px; }
+.monitor.uai-shell:has(.dash-signature) nav button[aria-current=page] { background: #c81420; color: white; }
+.monitor.uai-shell:has(.dash-signature) .mon-brand { margin-inline: 0; gap: 8px; }
+.monitor.uai-shell:has(.dash-signature) .mon-brand b { font-size: 18px; }
+@media(min-width:1600px) {
+ .dash-signature .dash-monitor-grid { grid-template-columns: 320px minmax(0,1fr); }
+ .dash-signature .dash-chart svg { max-height: 340px; }
+}
+@media(max-width:1250px) {
+ .dash-signature .dash-monitor-grid { grid-template-columns: 250px minmax(0,1fr); grid-template-areas: 'availability performance' 'attention attention' 'inventory inventory'; }
+ .dash-signature .dash-performance { padding: 22px; }
+ .dash-signature .dash-monitor-heading { flex-direction: column; align-items: stretch; }
+ .dash-signature .dash-monitor-heading label { width: 100%; }
+ .dash-signature .dash-attention { display: grid; grid-template-columns: 1fr 1fr; }
+ .dash-signature .dash-chart { overflow: auto; }
+ .dash-signature .dash-chart svg { min-width: 500px; }
+}
+@media(max-width:900px) {
+ .dash-signature .dash-monitor-grid { grid-template-columns: 1fr; grid-template-areas: 'availability' 'performance' 'attention' 'inventory'; }
+ .dash-signature .dash-availability { display: grid; grid-template-columns: 220px 1fr; column-gap: 24px; }
+ .dash-signature .dash-availability h2,.dash-signature .dash-availability>p { grid-column: 1; }
+ .dash-signature .dash-availability-visual { grid-column: 1; width: 100%; }
+ .dash-signature .dash-stats { grid-column: 2; grid-row: 1/5; }
+}
+@media(max-width:700px) {
+ .monitor.uai-shell:has(.dash-signature) .mon-sidebar { width: 100%; }
+ .monitor:has(.dash-signature) main { padding: 22px 16px; }
+ .monitor .dash-signature h1 { font-size: 32px; }
+ .dash-signature .dash-availability { display: block; padding: 22px; }
+ .dash-signature .dash-availability-visual { max-width: 240px; }
+ .dash-signature .dash-stat,.dash-signature .dash-stat:nth-child(even),.dash-signature .dash-stat:nth-child(3),.dash-signature .dash-stat:last-child { border: 0; border-bottom: 1px solid var(--dash-line); padding: 12px 0; }
+ .dash-signature .dash-stat:last-child { grid-column: auto; }
+ .dash-signature .dash-attention { display: block; }
+ .dash-signature .dash-performance { padding: 22px 18px; }
+ .dash-signature .dash-resources { gap: 24px; }
+ .dash-signature .dash-resources strong { font-size: 32px; }
+ .dash-signature .dash-legend { margin-top: 16px; }
+ .monitor .dash-signature .dash-inventory td { padding: 0; }
+ .dash-signature .dash-inventory-heading { padding: 18px; }
+}
+@media(max-width:1250px) {
+ .dash-signature .dash-chart text { font-size: 18px; }
+}

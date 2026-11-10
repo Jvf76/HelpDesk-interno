@@ -21,7 +21,7 @@ try {
    if(mode==='error'){await route.fulfill({status:503,contentType:'application/json',body:'{"message":"Falha simulada"}'});return;}
    if(u.pathname==='/api/monitoring/summary')body={counts:mode==='empty'?[]:[{state:'ONLINE',count:220},{state:'IN_SESSION',count:8},{state:'ERROR',count:3},{state:'OFFLINE',count:15},{state:'DISABLED',count:2}],totals:{total:mode==='empty'?0:248,alerts:12}};
    else if(u.pathname==='/api/inventory'){const filtered=u.searchParams.has('lowDisk')||u.searchParams.has('highCpu')||u.searchParams.has('highMemory');body={items:mode==='empty'?[]:devices.slice(0,Number(u.searchParams.get('size'))),total:mode==='empty'?0:filtered?6:248};}
-   else if(u.pathname==='/api/monitoring/series')body={points:mode==='empty'?[]:Array.from({length:12},(_,i)=>({observed_at:new Date(Date.now()-(11-i)*1800000).toISOString(),cpu_pct:23+i,memory_pct:48+i})),resolution:'sample',truncated:false};
+   else if(u.pathname==='/api/monitoring/series')body={points:mode==='empty'?[]:Array.from({length:12},(_,i)=>({observed_at:new Date(Date.now()-(11-i)*1800000).toISOString(),cpu_pct:[23,28,26,42,34,31,59,47,36,39,30,34][i],memory_pct:[48,49,51,50,56,54,63,60,57,58,61,59][i]})),resolution:'sample',truncated:false};
    else if(u.pathname===`/api/inventory/${devices[0].id}`)body={device:devices[0],latest:[],changes:[],connections:[],events:[],canConnect:true};
    else if(u.pathname.endsWith('/metrics'))body={points:[],resolution:'sample',truncated:false};
    else if(u.pathname.endsWith('/permissions')||u.pathname==='/api/users')body=[];
@@ -46,14 +46,18 @@ try {
  // The exception rail must stay in the content grid, never overlap navigation.
  const rail=await page.locator('.dash-attention').boundingBox();
  const performance=await page.locator('.dash-performance').boundingBox();
- assert(rail.x>=performance.x+performance.width,'Attention rail overlaps performance');
+ assert(rail.y>=performance.y+performance.height,'Attention rail overlaps performance');
+ assert.match(await page.locator('.dash-availability-visual').innerText(),/93/);
  assert.match(await page.locator('.dash-pressure').innerText(),/CPU acima do limite/);
  await page.screenshot({path:path.join(out,'desktop-light.png'),fullPage:true});
- await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(200);await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
+ await page.setViewportSize({width:1024,height:900});
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(out,'tablet-dark.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.screenshot({path:path.join(out,'mobile-dark.png'),fullPage:true});
- await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(200);await page.screenshot({path:path.join(out,'mobile-light.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'mobile-light.png'),fullPage:true});
  const first=page.getByRole('button',{name:devices[0].name,exact:true});await first.focus();await page.keyboard.press('Enter');
  await page.getByRole('heading',{name:'Identificação e dados detectados'}).waitFor();
  mode='empty';await page.reload();await page.getByRole('heading',{name:'Nenhum computador cadastrado'}).waitFor();await page.getByRole('heading',{name:'Sem métricas neste período'}).waitFor();await page.screenshot({path:path.join(out,'empty.png'),fullPage:true});

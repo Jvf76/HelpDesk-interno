@@ -1,13 +1,15 @@
 # Sistema visual — Uai Suporte
 
-## Visão geral: direção aprovada para implementação
+## Visão geral: composição com presença visual
 
-Modo Operate. Construção diretamente no código, uma tela por vez. Identidade oficial da Uai preservada. Referência de composição: galeria Statistics do Collect UI, sem copiar marcas ou componentes.
+Modo Operate. Construção diretamente no código, uma tela por vez. O usuário autorizou substituir a composição anterior para uma interface com personalidade e potencial de apresentação no LinkedIn. Preservar identidade e logo oficial da Uai, sem marcas ou componentes copiados.
 
-A proposta substitui a composição de cartões separados por uma faixa compacta de disponibilidade, uma área principal de desempenho e inventário e uma coluna de atenção. CPU e memória acima dos limites devem estar explícitas: médias nunca substituem alertas individuais. A coluna utiliza apenas resultados dos contratos existentes.
+Primeira faixa: bloco de disponibilidade à esquerda, painel amplo de monitoramento em grafite à direita. O arco representa a proporção de computadores Online entre os estados Online e Offline recebidos, com percentual e contagens textuais. Sem dispositivos ou antes do carregamento, não indicar 0% ou 100% de disponibilidade. Sessões ativas permanecem Online e têm contagem separada.
 
-Superfícies neutras claras ou grafite no tema escuro; navegação leve, vermelho institucional reservado à seleção; azul e violeta distinguem CPU e memória também por linha contínua/tracejada. Estados possuem texto e ícone. Números tabulares, hierarquia tipográfica discreta, controles nativos, foco visível e linhas de computador acionáveis por teclado.
+Monitoramento protagonista: superfície #192630 nos dois temas, CPU em verde-água e memória em violeta, linhas contínua/tracejada e preenchimentos discretos de área. Somente amostras recebidas, sem interpolar lacunas de coleta. Tabela acessível de valores e período nativo. Os gráficos não são elementos decorativos.
 
-Em telas intermediárias, a coluna de atenção passa para uma faixa entre gráfico e inventário; no celular, os blocos se empilham e a tabela usa o formato compacto existente. Não incluir ações fictícias, pesquisa no dashboard ou destinos não implementados habilitados.
+Segunda faixa: atenção à esquerda e inventário à direita. Médias nunca substituem as contagens de computadores acima dos limites. Alertas e links usam contratos existentes, sem prometer destinos não implementados. As listas parciais informam sua cobertura.
 
-Escopo desta direção: somente Visão geral. Demais telas mantêm sua apresentação existente. Aprovação da implementação permanece pendente.
+Tema claro com superfícies brancas e painel de gráfico grafite; tema escuro com camadas grafite distintas. Vermelho institucional reservado à navegação selecionada. Números tabulares, foco visível, estados por texto e ícone. Em tablet, atenção/inventário ocupam a largura disponível; em celular os blocos se empilham e a tabela conserva leitura e interação por teclado.
+
+Capturas para apresentação usam dados fictícios de teste e devem ser identificadas como demonstração. Não expor dados de colaboradores reais. Escopo: somente Visão geral; backend, autenticação e motor remoto preservados. Aprovação da implementação permanece pendente.

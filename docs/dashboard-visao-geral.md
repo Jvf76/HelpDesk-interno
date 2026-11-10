@@ -72,3 +72,11 @@ Implementação restrita à Visão geral: faixa única de indicadores, navegaç�
 Direção registrada em DESIGN.md. Capturas reais com API simulada em `/home/agenda/uai-suporte-design-20261110/operacional/index.html`. Build aprovado, testes do dashboard aprovados, foco/teclado, estados vazio/erro/carregamento e temas verificados em 1440px e 390px. Adicionada asserção geométrica contra sobreposição da coluna de atenção ao conteúdo. Capturas não atestam coleta ou sessão Windows real.
 
 A suíte completa apresentou uma falha transitória na asserção de tela cheia do visualizador web durante execuções concorrentes. A repetição isolada do visualizador web passou; as 69 verificações de monitoramento também passaram. Nenhum código do visualizador foi alterado. Nenhum erro inesperado de console foi observado na validação do dashboard.
+
+## Direção com maior presença visual
+
+A composição anterior foi substituída: disponibilidade em arco com valores textuais, painel de monitoramento grafite nos dois temas, gráficos maiores com preenchimento discreto e série tracejada de memória, atenção e inventário na segunda faixa. Mantidos os cinco indicadores, estado Online/Offline e contagem independente de sessões. O arco não apresenta percentual antes dos dados ou com frota vazia. Os preenchimentos do gráfico respeitam lacunas entre amostras.
+
+Capturas da interface real com respostas simuladas para revisão; os dados variados pertencem exclusivamente ao teste, não ao frontend de produção. Validar apresentação em 1440px, 1024px e 390px. A captura de tema espera a estabilização da pintura do navegador. Nenhuma mudança de backend, autenticação, consentimento ou motor remoto.
+
+Validação final: suíte completa do frontend aprovada (incluindo os dois modos do visualizador e 69 verificações de monitoramento), build aprovado e nenhuma mensagem inesperada de console no dashboard. Após ajustar o tamanho dos rótulos do gráfico em telas menores, build e testes do dashboard repetidos. Galeria: `/home/agenda/uai-suporte-design-20261110/assinatura/index.html`. A avaliação visual da nova composição permanece pendente com o responsável pelo produto.
