@@ -49,3 +49,18 @@ npm run test:e2e
 ```
 
 O teste dedicado `npm run test:dashboard` regenera as capturas com API simulada. A aprovação de design continua sendo do usuário; não avançar para outras telas até recebê-la. Sem push ou implantação.
+
+## Refinamento visual após avaliação do usuário
+
+A reformulação mantém os contratos e a lógica de dados, e muda a apresentação:
+
+- Navegação grafite com seleção em vermelho institucional e logo oficial preservada.
+- Total de equipamentos em destaque; disponibilidade, sessões e alertas continuam separados.
+- Seletor de período, médias e gráfico reunidos no painel de desempenho.
+- Armazenamento em coluna de atenção, com cidade, colaborador e acesso ao equipamento.
+- Tabela mais compacta, com indicadores proporcionais de CPU/memória/disco além do valor textual, sem classificar severidade por limiares inventados.
+- Temas claro/escuro e composição móvel preservados. Métricas sem coleta e equipamento offline não recebem barras fictícias.
+
+Capturas da reformulação: `/home/agenda/uai-suporte-design-20261110/refinado/`. São capturas reais do React compilado com API de testes, não imagens conceituais. A aprovação continua pendente; nenhuma outra tela ou regra de autenticação foi implementada.
+
+Validação do refinamento: build e suíte completa do frontend passaram; 69 verificações de monitoramento incluem o histórico em tema escuro. Capturas verificadas em desktop e celular; sem erros inesperados de console no dashboard.

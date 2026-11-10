@@ -44,11 +44,11 @@ try {
  await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
  assert(calls.some(x=>x.startsWith('/api/monitoring/series?')));
  await page.screenshot({path:path.join(out,'desktop-light.png'),fullPage:true});
- await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(200);await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.screenshot({path:path.join(out,'mobile-dark.png'),fullPage:true});
- await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.screenshot({path:path.join(out,'mobile-light.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(200);await page.screenshot({path:path.join(out,'mobile-light.png'),fullPage:true});
  const first=page.getByRole('button',{name:devices[0].name,exact:true});await first.focus();await page.keyboard.press('Enter');
  await page.getByRole('heading',{name:'Identificação e dados detectados'}).waitFor();
  mode='empty';await page.reload();await page.getByRole('heading',{name:'Nenhum computador cadastrado'}).waitFor();await page.getByRole('heading',{name:'Sem métricas neste período'}).waitFor();await page.screenshot({path:path.join(out,'empty.png'),fullPage:true});
