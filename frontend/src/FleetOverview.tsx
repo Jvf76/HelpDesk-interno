@@ -1,3 +1,4 @@
+import {ComputerAvailability} from "./ComputerAvailability";
 import {useEffect,useState} from "react";
 import { Monitor, CircleOff, Cpu, MemoryStick, AlertTriangle } from "lucide-react";
 import {api,date} from "./api";
@@ -44,13 +45,13 @@ export function MetricHistoryChart({endpoint,title,series,percent=false,periodLa
  },[endpoint,period,range,retry]);
  return <div className="mon-metric-panel" role="region" aria-label={title+" — período independente"}>
   <div className="mon-metric-controls"><label>{periodLabel}<select aria-label={periodLabel+" — "+title} value={period} onChange={e=>{setPeriod(e.target.value);setRanges([]);}}>{[["0.25","Últimos 15 minutos"],["1","Última hora"],["6","Últimas 6 horas"],["24","Últimas 24 horas"],["168","Últimos 7 dias"]].map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label><div className="mon-metric-buttons"><button disabled={!range||loading} onClick={()=>setRanges(v=>v.slice(0,-1))}>Voltar período</button><button disabled={!range||loading} onClick={()=>setRanges([])}>Restaurar período completo</button></div></div>
-  <div className="mon-metric-status" aria-live="polite">{error?<span role="alert">Não foi possível atualizar. {data?"Últimos dados preservados.":"Sem dados disponíveis."} <button onClick={()=>setRetry(v=>v+1)}>Tentar novamente</button></span>:loading?"Atualizando período…":data?.truncated?"Limite de amostras atingido. Reduza o período.":data?.resolution==="hour"?"Médias por hora; contagens consolidadas podem ser fracionárias.":"Selecione uma amostra para ampliar apenas este gráfico."}</div>
+  <div className="mon-metric-status" aria-live="polite">{error?<span role="alert">Não foi possível atualizar. {data?"Últimos dados preservados.":"Sem dados disponíveis."} <button onClick={()=>setRetry(v=>v+1)}>Tentar novamente</button></span>:loading?"Atualizando período…":data?.truncated?"Limite de amostras atingido. Reduza o período.":data?.resolution==="hour"?"Uso médio por hora no período selecionado.":"Selecione uma amostra para ampliar apenas este gráfico."}</div>
   <SeriesChart guide={guide} title={title} points={data?.points||[]} series={series} percent={percent} range={data?.range} onZoom={!loading&&!error?r=>setRanges(v=>[...v,r]):undefined}/>
  </div>;
 }
 export function FleetOverview(){
  return <section className="mon-observability" aria-label="Monitoramento geral"><div className="mon-charts">
- <MetricHistoryChart endpoint="/monitoring/series" title="Computadores online e offline" guide={{description:"Veja quantos computadores estavam se comunicando com o Uai Suporte em cada horário.",unit:"Quantidade de computadores",footnote:"Leia da esquerda para a direita para acompanhar o tempo. Quanto mais alta a linha, maior a quantidade de computadores naquele estado. Cadastros desativados não entram nesta contagem.",availability:true}} series={[{key:"online",label:"Online",color:"#83e0cf",description:"Computadores com comunicação recente."},{key:"offline",label:"Offline",color:"#f1c875",description:"Computadores sem comunicação recente."}]}/>
+ <ComputerAvailability/>
  <MetricHistoryChart endpoint="/monitoring/series" title="Uso de processamento e memória" guide={{description:"Acompanhe quanto da capacidade dos computadores está sendo utilizada. Os valores são médias dos computadores com coleta recente.",unit:"Capacidade utilizada (%)",footnote:"0% significa nenhum uso; 100% significa toda a capacidade utilizada. Uma média baixa pode esconder um computador sobrecarregado. Confira também os alertas na Visão geral."}} percent series={[{key:"cpu_pct",label:"Processador (CPU)",color:"#83e0cf",description:"Capacidade usada para executar programas e tarefas."},{key:"memory_pct",label:"Memória (RAM)",color:"#d2b5ff",description:"Memória ocupada pelo sistema e pelos programas abertos."}]}/>
  </div></section>;
 }

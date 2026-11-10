@@ -27,3 +27,7 @@ Monitoramento: componente existente FleetOverview exposto em sua aba, com perío
 Aplicação da skill local frontend-design. A direção preserva a identidade aprovada: grafite #192630, texto claro #f0f5f8, texto secundário #b4c4cf, verde-água #83e0cf, âmbar #f1c875 e violeta #d2b5ff. Tipografia operacional existente; títulos 22px, legendas 15px, explicações 13–14px. Alinhamento à esquerda. Organização: título e explicação, última coleta e duas leituras identificadas, evolução no tempo, orientação de interpretação.
 
 A revisão do plano retirou quatro séries de significados diferentes do mesmo gráfico. Disponibilidade agora compara somente Online e Offline; comunicação prolongada e alertas de recursos aparecem em um resumo separado, com aviso de sobreposição. Processamento e memória têm definições práticas e porcentagens da capacidade; médias são identificadas explicitamente. Não inventar limites de normalidade ou afirmar que uma média representa todos os computadores. O desenho utiliza texto, ícones e traçados contínuo/tracejado, não apenas cores.
+
+### Revisão: Online/Offline em números absolutos
+
+A orientação mais recente substitui a evolução histórica de disponibilidade por um bloco de estado atual com duas contagens inteiras: Online e Offline. Não usar médias horárias nem arredondá-las para representar equipamentos. Manter timestamp, atualização manual, estado vazio/carregamento e erro com dados preservados. O gráfico temporal fica reservado ao processamento e à memória.

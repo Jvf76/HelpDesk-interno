@@ -78,9 +78,10 @@ try {
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
  await page.getByRole('img',{name:'Uso de processamento e memória',exact:true}).waitFor();
  const resources=page.getByRole('region',{name:'Uso de processamento e memória — período independente'});
- const availability=page.getByRole('region',{name:'Computadores online e offline — período independente'});
- const originalAvailability=await availability.getByRole('img').innerHTML();
- assert.equal(await availability.locator('.mon-reading-item').count(),2);
+ const availability=page.getByRole('region',{name:'Computadores online e offline',exact:true});
+ const originalAvailability=await availability.locator('.mon-availability-counts').innerText();
+ assert.equal(await availability.locator('.mon-availability-counts strong').allTextContents().then(v=>v.join(',')),'231,17');
+ assert.equal(await availability.getByRole('img').count(),0);
  assert.match(await resources.locator('.mon-chart-intro').innerText(),/médias/);
  assert.match(await resources.locator('.mon-reading-grid').innerText(),/Processador \(CPU\)/);
  assert.match(await resources.locator('.mon-reading-grid').innerText(),/Memória \(RAM\)/);
@@ -93,13 +94,13 @@ try {
  await target.click();
  await resources.getByText('Atualizando período…').waitFor({state:'hidden'});
  assert(Math.abs(await page.evaluate(()=>scrollY)-scrollBefore)<3,'Zoom must preserve vertical scroll');
- assert.equal(await availability.getByRole('img').innerHTML(),originalAvailability,'Other graph must not change');
+ assert.equal(await availability.locator('.mon-availability-counts').innerText(),originalAvailability,'Other graph must not change');
  assert.equal(calls.filter(x=>x.startsWith('/api/monitoring/series?')).length,requestsBefore+1);
- assert(await availability.getByRole('button',{name:'Voltar período',exact:true}).isDisabled());
+ assert.equal(await availability.getByRole('combobox').count(),0);
  assert(await resources.getByRole('button',{name:'Voltar período',exact:true}).isEnabled());
  await resources.getByRole('combobox').selectOption('24');
  await resources.getByText('Atualizando período…').waitFor({state:'hidden'});
- assert.equal(await availability.getByRole('combobox').inputValue(),'1');
+ assert.equal(await availability.getByRole('combobox').count(),0);
  assert.equal(await resources.getByRole('combobox').inputValue(),'24');
 
  process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'monitoring-dark.png'),fullPage:true});

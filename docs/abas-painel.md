@@ -22,3 +22,7 @@ Build e suíte completa aprovados após a correção. Novas verificações inclu
 ## Clareza dos gráficos
 
 Monitoramento apresenta “Computadores online e offline” e “Uso de processamento e memória”. Cada leitura identifica a última coleta do período, explica o significado da medida e informa a unidade do eixo. Alertas são separados da comparação de disponibilidade para não misturar estados e condições sobrepostas. CPU e RAM recebem nomes completos e explicações; valores sem coleta permanecem “Sem medição”. Períodos independentes, ampliação e estabilidade de rolagem preservados. Sem capturas automáticas.
+
+## Disponibilidade como contagem atual
+
+Por solicitação do usuário, o gráfico histórico Online/Offline foi substituído por dois contadores de estado atual, usando `/monitoring/summary`. As médias históricas por hora não são mais usadas para contar computadores. Contagens são inteiras, sem arredondar médias; resposta inválida é tratada como erro. Atualização automática a cada 30 segundos, ação de atualização manual e aviso de dados preservados em falha. CPU e memória permanecem como gráfico temporal independente. A classificação inclui sessões em Online e cadastros desativados em Offline, conforme contrato já usado na Visão geral.
