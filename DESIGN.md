@@ -21,3 +21,9 @@ Após avaliação do dashboard, o usuário autorizou aplicar sua linguagem visua
 Computadores: superfície de inventário, pesquisa agrupada com filtros, linhas com identificação e disponibilidade por texto e ícone. Detalhes: dados detectados em grade, formulários administrativos e painéis de gráficos em grafite. Preservar ações e permissões existentes.
 
 Monitoramento: componente existente FleetOverview exposto em sua aba, com período, ampliação por ponto, retorno de zoom e tentativa novamente em erro. Histórico: consulta paginada de computadores seguida dos registros já expostos por inventory/{id}; até 100 sessões, alterações administrativas e eventos por equipamento. Não é auditoria global, não traz todos os eventos do sistema e não inventa evidências de primeiro frame ou controle.
+
+## Gráficos de monitoramento compreensíveis sem conhecimento técnico
+
+Aplicação da skill local frontend-design. A direção preserva a identidade aprovada: grafite #192630, texto claro #f0f5f8, texto secundário #b4c4cf, verde-água #83e0cf, âmbar #f1c875 e violeta #d2b5ff. Tipografia operacional existente; títulos 22px, legendas 15px, explicações 13–14px. Alinhamento à esquerda. Organização: título e explicação, última coleta e duas leituras identificadas, evolução no tempo, orientação de interpretação.
+
+A revisão do plano retirou quatro séries de significados diferentes do mesmo gráfico. Disponibilidade agora compara somente Online e Offline; comunicação prolongada e alertas de recursos aparecem em um resumo separado, com aviso de sobreposição. Processamento e memória têm definições práticas e porcentagens da capacidade; médias são identificadas explicitamente. Não inventar limites de normalidade ou afirmar que uma média representa todos os computadores. O desenho utiliza texto, ícones e traçados contínuo/tracejado, não apenas cores.

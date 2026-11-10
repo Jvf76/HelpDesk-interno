@@ -51,11 +51,11 @@
 .monitor.uai-panel-design .mon-series :is(p,small,.mon-legend,.mon-chart-reading) { color:#b4c4cf; }
 .monitor.uai-panel-design .mon-series text { fill:#b4c4cf; font-size:12px; }
 .monitor.uai-panel-design .mon-series .mon-grid-line { stroke:#344653; stroke-dasharray:2 5; }
-.monitor.uai-panel-design .mon-series svg { display:block; width:100%; }
+.monitor.uai-panel-design .mon-series svg[role=img] { display:block; width:100%; }
 .monitor.uai-panel-design .mon-series circle:focus { stroke:#fff; stroke-width:3px; }
 .monitor.uai-panel-design .mon-charts { gap:22px; }
 .monitor.uai-panel-design .panel-monitoring .mon-charts { grid-template-columns:1fr; }
-.monitor.uai-panel-design .panel-monitoring .mon-series svg { max-height:320px; }
+.monitor.uai-panel-design .panel-monitoring .mon-series svg[role=img] { max-height:320px; }
 .monitor.uai-panel-design .panel-monitoring .mon-series { margin:0; }
 .monitor.uai-panel-design .mon-observability>.mon-list-title { padding:22px; border:1px solid var(--dash-line); border-radius:16px; background:var(--dash-surface); }
 .monitor.uai-panel-design .panel-history-selection { padding:24px; }
@@ -82,7 +82,7 @@
  .monitor.uai-panel-design .panel-device-detail>.mon-card { padding:18px; }
  .monitor.uai-panel-design .mon-list-title { flex-direction:column; align-items:stretch; gap:14px; }
  .monitor.uai-panel-design .mon-series { padding:18px; overflow:auto; }
- .monitor.uai-panel-design .mon-series svg { min-width:500px; }
+ .monitor.uai-panel-design .mon-series svg[role=img] { min-width:500px; }
  .monitor.uai-panel-design .panel-history-selection { padding:18px; }
  .panel-history-events { grid-template-columns:1fr; gap:0; }
  .monitor.uai-panel-design .panel-history .mon-table table { min-width:680px; }
@@ -97,7 +97,7 @@
 .monitor.uai-panel-design .mon-metric-buttons { display:flex; gap:8px; flex-wrap:wrap; }
 .monitor.uai-panel-design .mon-metric-status { min-height:64px; font-size:13px; color:var(--dash-muted); display:flex; align-items:center; }
 .monitor.uai-panel-design .mon-series { margin:0; }
-.monitor.uai-panel-design .mon-series svg { height:300px; min-width:600px; max-height:none; }
+.monitor.uai-panel-design .mon-series svg[role=img] { height:300px; min-width:600px; max-height:none; }
 .monitor.uai-panel-design .mon-series { overflow-x:auto; }
 .monitor.uai-panel-design .mon-series text { font-size:15px; }
 .monitor.uai-panel-design .mon-series-empty { height:300px; margin:0; }
@@ -113,3 +113,31 @@
 }
 .monitor.uai-panel-design .mon-series-empty { height:376px; }
 @media(max-width:700px) { .monitor.uai-panel-design .mon-series-empty { height:420px; } }
+/* Monitoring explains what is measured before asking the reader to interpret it. */
+.monitor.uai-panel-design .mon-explained-chart { padding:28px; }
+.monitor.uai-panel-design .mon-explained-chart h3 { font-size:22px; line-height:1.3; }
+.monitor.uai-panel-design .mon-chart-intro { max-width:75ch; font-size:14px; line-height:1.7; margin-top:10px; }
+.mon-chart-snapshot { margin:24px 0; }
+.mon-chart-snapshot>span { display:block; color:#b4c4cf; font-size:12px; margin-bottom:14px; }
+.mon-reading-grid { display:grid; grid-template-columns:1fr 1fr; gap:32px; }
+.mon-reading-item { border-top:1px solid #435561; padding-top:16px; }
+.mon-reading-label { display:flex; align-items:center; gap:8px; font-size:15px; color:#f0f5f8; }
+.mon-reading-label i { width:30px; margin-left:auto; }
+.mon-reading-item strong { display:block; font-size:34px; font-weight:600; line-height:1.3; margin-top:8px; }
+.monitor.uai-panel-design .mon-reading-item p { font-size:13px; line-height:1.6; margin-top:6px; }
+.mon-axis-caption { font-size:13px; color:#d3dfe7; }
+.monitor.uai-panel-design .mon-chart-explanation { border-top:1px solid #435561; padding-top:16px; }
+.monitor.uai-panel-design .mon-chart-explanation p { max-width:80ch; font-size:13px; line-height:1.7; }
+.mon-chart-alert-summary { display:flex; gap:10px; margin-top:14px; color:#f1c875; font-size:13px; line-height:1.7; }
+.mon-chart-alert-summary>svg { flex:none; margin-top:3px; }
+@media(max-width:700px) {
+ .monitor.uai-panel-design .mon-explained-chart { padding:18px; }
+ .monitor.uai-panel-design .mon-explained-chart h3 { font-size:20px; }
+ .mon-reading-grid { gap:18px; }
+ .mon-reading-label { font-size:13px; flex-wrap:wrap; }
+ .mon-reading-label i { margin-left:0; width:22px; }
+ .mon-reading-item strong { font-size:28px; }
+}
+
+.monitor.uai-panel-design .mon-reading-label>svg { width:18px; height:18px; min-width:18px; flex:none; }
+.monitor.uai-panel-design .mon-chart-alert-summary>svg { width:17px; height:17px; min-width:17px; flex:none; }

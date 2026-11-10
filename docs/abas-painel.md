@@ -18,3 +18,7 @@ Cada gráfico de monitoramento e de recursos do equipamento tem seu próprio per
 Rótulos maiores, cinco referências no eixo vertical, datas abreviadas no eixo horizontal, legenda contínua/tracejada e valores detalhados em texto. Gráficos continuam acessíveis por teclado. Testes de regressão verificam isolamento das consultas e estabilidade de scroll em clique desktop e Enter no celular. Capturas de testes agora exigem `UAI_CAPTURE_UI=1`; desativadas por padrão conforme preferência do usuário.
 
 Build e suíte completa aprovados após a correção. Novas verificações incluem alteração do seletor apenas de CPU/memória, ausência de nova consulta no gráfico vizinho, período independente do disco e estabilidade da posição vertical após zoom com mouse e teclado. Sem capturas geradas nesta validação.
+
+## Clareza dos gráficos
+
+Monitoramento apresenta “Computadores online e offline” e “Uso de processamento e memória”. Cada leitura identifica a última coleta do período, explica o significado da medida e informa a unidade do eixo. Alertas são separados da comparação de disponibilidade para não misturar estados e condições sobrepostas. CPU e RAM recebem nomes completos e explicações; valores sem coleta permanecem “Sem medição”. Períodos independentes, ampliação e estabilidade de rolagem preservados. Sem capturas automáticas.

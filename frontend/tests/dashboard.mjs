@@ -76,18 +76,24 @@ try {
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
  // Verify newly available tabs against the same existing API contracts.
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
- await page.getByRole('img',{name:'Uso médio de recursos',exact:true}).waitFor();
- const resources=page.getByRole('region',{name:'Uso médio de recursos — período independente'});
- const availability=page.getByRole('region',{name:'Disponibilidade dos computadores — período independente'});
- const originalAvailability=await availability.locator('svg').innerHTML();
- const target=resources.locator('circle').nth(4);
+ await page.getByRole('img',{name:'Uso de processamento e memória',exact:true}).waitFor();
+ const resources=page.getByRole('region',{name:'Uso de processamento e memória — período independente'});
+ const availability=page.getByRole('region',{name:'Computadores online e offline — período independente'});
+ const originalAvailability=await availability.getByRole('img').innerHTML();
+ assert.equal(await availability.locator('.mon-reading-item').count(),2);
+ assert.match(await resources.locator('.mon-chart-intro').innerText(),/médias/);
+ assert.match(await resources.locator('.mon-reading-grid').innerText(),/Processador \(CPU\)/);
+ assert.match(await resources.locator('.mon-reading-grid').innerText(),/Memória \(RAM\)/);
+ for(const icon of await resources.locator('.mon-reading-label>svg').all()) assert((await icon.boundingBox()).width<=20);
+
+ const target=resources.getByRole('img').locator('circle').nth(4);
  await target.scrollIntoViewIfNeeded();
  const scrollBefore=await page.evaluate(()=>scrollY);
  const requestsBefore=calls.filter(x=>x.startsWith('/api/monitoring/series?')).length;
  await target.click();
  await resources.getByText('Atualizando período…').waitFor({state:'hidden'});
  assert(Math.abs(await page.evaluate(()=>scrollY)-scrollBefore)<3,'Zoom must preserve vertical scroll');
- assert.equal(await availability.locator('svg').innerHTML(),originalAvailability,'Other graph must not change');
+ assert.equal(await availability.getByRole('img').innerHTML(),originalAvailability,'Other graph must not change');
  assert.equal(calls.filter(x=>x.startsWith('/api/monitoring/series?')).length,requestsBefore+1);
  assert(await availability.getByRole('button',{name:'Voltar período',exact:true}).isDisabled());
  assert(await resources.getByRole('button',{name:'Voltar período',exact:true}).isEnabled());
@@ -126,10 +132,10 @@ try {
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'history-mobile.png'),fullPage:true});
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
- await page.getByRole('img',{name:'Uso médio de recursos',exact:true}).waitFor();
+ await page.getByRole('img',{name:'Uso de processamento e memória',exact:true}).waitFor();
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- const mobileResources=page.getByRole('region',{name:'Uso médio de recursos — período independente'});
- const mobilePoint=mobileResources.locator('circle').nth(3);
+ const mobileResources=page.getByRole('region',{name:'Uso de processamento e memória — período independente'});
+ const mobilePoint=mobileResources.getByRole('img').locator('circle').nth(3);
  await mobilePoint.scrollIntoViewIfNeeded();await mobilePoint.focus();
  const mobileScroll=await page.evaluate(()=>scrollY);
  await page.keyboard.press('Enter');
