@@ -52,7 +52,7 @@
 .monitor.uai-panel-design .mon-series text { fill:#b4c4cf; font-size:12px; }
 .monitor.uai-panel-design .mon-series .mon-grid-line { stroke:#344653; stroke-dasharray:2 5; }
 .monitor.uai-panel-design .mon-series svg[role=img] { display:block; width:100%; }
-.monitor.uai-panel-design .mon-series circle:focus { stroke:#fff; stroke-width:3px; }
+.monitor.uai-panel-design .mon-series circle:focus-visible { stroke:#fff; stroke-width:3px; }
 .monitor.uai-panel-design .mon-charts { gap:22px; }
 .monitor.uai-panel-design .panel-monitoring .mon-charts { grid-template-columns:1fr; }
 .monitor.uai-panel-design .panel-monitoring .mon-series svg[role=img] { max-height:320px; }
@@ -152,3 +152,5 @@
 @media(max-width:700px) { .monitor.uai-panel-design .mon-current-availability { padding:18px; } .mon-availability-counts { gap:18px; } .mon-availability-counts strong { font-size:32px; } }
 
 .monitor.uai-panel-design .mon-current-availability svg.lucide { flex:none; }
+
+.monitor.uai-panel-design .mon-series .mon-chart-sample:not(:focus-visible) { stroke:none; outline:none; }
