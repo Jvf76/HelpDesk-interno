@@ -94,6 +94,17 @@ try {
 
  const target=resources.getByRole('img').locator('circle').nth(4);
  await target.scrollIntoViewIfNeeded();
+ await target.hover();
+ const tooltip=page.getByRole('tooltip');
+ await tooltip.waitFor();
+ assert.match(await tooltip.innerText(),/Processador \(CPU\)/);
+ assert.match(await tooltip.innerText(),/\d{2}:\d{2}:\d{2}/);
+ const tooltipBounds=await tooltip.boundingBox();
+ const viewport=page.viewportSize();
+ assert(tooltipBounds.x>=0&&tooltipBounds.y>=0&&tooltipBounds.x+tooltipBounds.width<=viewport.width&&tooltipBounds.y+tooltipBounds.height<=viewport.height);
+ const pointBounds=await target.boundingBox();
+ assert(Math.abs(tooltipBounds.y-pointBounds.y)<220,'Tooltip must stay near hovered point');
+ await page.keyboard.press('Escape');await tooltip.waitFor({state:'hidden'});
  const scrollBefore=await page.evaluate(()=>scrollY);
  const requestsBefore=calls.filter(x=>x.startsWith('/api/monitoring/series?')).length;
  await target.click();

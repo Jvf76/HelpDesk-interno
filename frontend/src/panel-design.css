@@ -154,3 +154,8 @@
 .monitor.uai-panel-design .mon-current-availability svg.lucide { flex:none; }
 
 .monitor.uai-panel-design .mon-series .mon-chart-sample:not(:focus-visible) { stroke:none; outline:none; }
+.uai-chart-tooltip { position:fixed; z-index:10000; pointer-events:none; width:280px; max-width:calc(100vw - 16px); box-sizing:border-box; padding:14px 16px; background:#f5f8fb; color:#192630; border-radius:10px; box-shadow:0 6px 24px #0004; font:13px/1.5 "Segoe UI",Arial,sans-serif; font-variant-numeric:tabular-nums; }
+.uai-chart-tooltip>strong { display:block; font-size:14px; }
+.uai-chart-tooltip-note { display:block; font-size:11px; color:#52616c; margin:2px 0 10px; }
+.uai-chart-tooltip-value { display:flex; justify-content:space-between; gap:16px; padding:4px 0; }
+.uai-chart-tooltip-value b { white-space:nowrap; }

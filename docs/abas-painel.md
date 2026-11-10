@@ -30,3 +30,7 @@ Por solicitação do usuário, o gráfico histórico Online/Offline foi substitu
 ## Correção da escala dos ícones
 
 As regras antigas `.mon-charts svg` e `.mon-series svg` aplicavam largura de gráfico também aos ícones do novo resumo. Foram restritas a `svg[role=img]`, mantendo os ícones Lucide no tamanho definido pelo componente. O resumo de disponibilidade recebeu números e espaçamentos mais compactos. Regressão no navegador verifica largura e altura dos ícones em desktop e celular, junto das verificações existentes de temas e interação. Sem capturas.
+
+## Leitura junto ao cursor
+
+Os gráficos de monitoramento e recursos exibem data, hora e valores da coleta mais próxima em tooltip junto ao cursor, sem alterar a altura da página. A caixa é posicionada no viewport, inverte lado perto das bordas e não intercepta cliques. O foco por teclado também mostra a leitura; Escape, saída do gráfico, rolagem e mudança de dados fecham a caixa. O rodapé mantém somente a instrução de uso. Sem capturas automáticas.
