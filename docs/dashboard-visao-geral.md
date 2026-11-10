@@ -64,3 +64,11 @@ A reformulação mantém os contratos e a lógica de dados, e muda a apresentaç
 Capturas da reformulação: `/home/agenda/uai-suporte-design-20261110/refinado/`. São capturas reais do React compilado com API de testes, não imagens conceituais. A aprovação continua pendente; nenhuma outra tela ou regra de autenticação foi implementada.
 
 Validação do refinamento: build e suíte completa do frontend passaram; 69 verificações de monitoramento incluem o histórico em tema escuro. Capturas verificadas em desktop e celular; sem erros inesperados de console no dashboard.
+
+## Recomposição operacional após referências do Collect UI
+
+Implementação restrita à Visão geral: faixa única de indicadores, navegação neutra nos dois temas, desempenho e inventário na área principal, coluna de atenção com contagem de CPU/memória acima do limite e alertas de armazenamento. Os primeiros equipamentos retornados pelos filtros existentes abrem seus detalhes; a interface informa quantos estão sendo exibidos, sem prometer lista completa. Sem novos endpoints.
+
+Direção registrada em DESIGN.md. Capturas reais com API simulada em `/home/agenda/uai-suporte-design-20261110/operacional/index.html`. Build aprovado, testes do dashboard aprovados, foco/teclado, estados vazio/erro/carregamento e temas verificados em 1440px e 390px. Adicionada asserção geométrica contra sobreposição da coluna de atenção ao conteúdo. Capturas não atestam coleta ou sessão Windows real.
+
+A suíte completa apresentou uma falha transitória na asserção de tela cheia do visualizador web durante execuções concorrentes. A repetição isolada do visualizador web passou; as 69 verificações de monitoramento também passaram. Nenhum código do visualizador foi alterado. Nenhum erro inesperado de console foi observado na validação do dashboard.

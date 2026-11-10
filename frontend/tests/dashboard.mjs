@@ -43,6 +43,11 @@ try {
  await page.getByLabel('Período dos gráficos').selectOption('24');
  await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
  assert(calls.some(x=>x.startsWith('/api/monitoring/series?')));
+ // The exception rail must stay in the content grid, never overlap navigation.
+ const rail=await page.locator('.dash-attention').boundingBox();
+ const performance=await page.locator('.dash-performance').boundingBox();
+ assert(rail.x>=performance.x+performance.width,'Attention rail overlaps performance');
+ assert.match(await page.locator('.dash-pressure').innerText(),/CPU acima do limite/);
  await page.screenshot({path:path.join(out,'desktop-light.png'),fullPage:true});
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(200);await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
