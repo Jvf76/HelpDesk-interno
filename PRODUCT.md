@@ -96,3 +96,7 @@ O sucesso depende de permitir suporte com consentimento explícito, mostrar o es
 ## Accessibility & Inclusion
 
 Preservar responsividade, acessibilidade e bom funcionamento. Consentimento, permissões concedidas, estado ativo e encerramento devem ser claros e utilizáveis. Nenhum padrão normativo específico foi definido nesta inicialização.
+
+## Terminologia e expansão prevista
+
+Usar “equipamentos” em vez de “frota” nos textos do produto. O responsável prevê adicionar uma área de impressoras. Essa intenção não atesta suporte já implementado nem define ainda as funcionalidades dessa área. Indicadores e ações específicos de computadores continuam identificados como tal.
