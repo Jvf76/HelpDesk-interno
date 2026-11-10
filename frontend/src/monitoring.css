@@ -42,3 +42,18 @@
 .monitor[data-theme=dark] .mon-action-menu::backdrop{background:#0005}
 @media(max-width:700px){.mon-account>div{display:none}.mon-observability>.mon-list-title label{width:100%}.mon-series{padding:16px}.mon-observability .mon-charts{gap:0}}
 .monitor .mon-observability{background:transparent;border:0;box-shadow:none;border-radius:0;padding:0}.monitor[data-theme=dark] th{border-bottom-color:var(--line)}.monitor[data-theme=dark] .mon-brand{gap:8px}.monitor[data-theme=dark] .mon-brand img{width:58px;height:58px;flex-shrink:0}
+
+/* The history is a layout group, not a white card inherited from global section styles. */
+.monitor .mon-resource-history {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  color: inherit;
+}
+.monitor[data-theme=dark] .mon-resource-history select,
+.monitor[data-theme=dark] .mon-resource-history option {
+  background: #222b39;
+  color: #dce5f3;
+  color-scheme: dark;
+}

@@ -54,6 +54,17 @@ try{for(const role of ['ADMIN','LEITURA']){
  await page.getByRole('button',{name:device.public_code,exact:true}).click();await page.getByRole('heading',{name:'Identificação e dados detectados',exact:true}).waitFor();checks++;
  await page.getByText('WINDOWS/user',{exact:true}).waitFor();checks++;
  await page.getByRole('img',{name:'CPU e memória RAM',exact:true}).waitFor();await page.getByRole('img',{name:'Espaço livre em disco',exact:true}).waitFor();assert(calls.some(x=>x.startsWith('/api/inventory/'+device.id+'/metrics?')));checks+=3;
+ const resourceHistory=page.getByRole('region',{name:'Histórico de recursos'});
+ assert.equal(await resourceHistory.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+ assert.equal(await page.getByLabel('Período do histórico').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(34, 43, 57)');
+ if(role==='ADMIN'){
+  await resourceHistory.screenshot({path:'../.tools/ui-redesign/history-dark.png'});
+  await page.getByRole('button',{name:'Ativar tema claro'}).click();
+  assert.equal(await page.getByLabel('Período do histórico').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+  await resourceHistory.screenshot({path:'../.tools/ui-redesign/history-light.png'});
+  await page.getByRole('button',{name:'Ativar tema escuro'}).click();
+ }
+ checks+=2;
  if(role==='ADMIN'){
  await page.getByRole('button',{name:'Conectar',exact:true}).click();
  const card=page.locator('.remote-session');
