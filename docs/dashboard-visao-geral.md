@@ -19,23 +19,33 @@ Resumo, recursos, alertas e tabela têm carregamento, ausência de dados e erro 
 - Nenhum segredo, endpoint, dado de exemplo ou valor fixo de frota foi adicionado ao código de produção. Dados de exemplo existem somente nos testes interceptados.
 - Não alterados backend, banco, autenticação, visualizador, consentimento Windows ou motor. Identificação “Equipe de TI” é apresentação; não muda contas ou regras de autorização.
 
-## Validação
+## Validação concluída após liberação do ambiente
+
+Em 10/11/2026, o navegador e o preview puderam ser executados. Os bloqueios anteriores de sandbox foram superados pela alteração de permissões autorizada pelo usuário; não houve mudança nas regras de autenticação nem no motor remoto.
 
 - Build de produção com TypeScript e Vite: passou.
-- Testes sem navegador (`quality.mjs` e `dashboard-data.mjs`): passaram. Verificam inclusive a sobreposição de sessão com Online e ausência de métricas distinta de zero.
-- `npm run test:e2e`: iniciou e passou pelo teste de qualidade, mas parou na inicialização do Chromium antes dos testes de interface: `sandbox_host_linux.cc: Operation not permitted`.
-- Teste dedicado `node tests/dashboard.mjs`: também bloqueado ao iniciar Chromium. As verificações foram escritas, mas **não executadas com sucesso**.
-- Preview local na porta 4175: bloqueado por `listen EPERM`.
-- Portanto, console, renderização, teclado real, temas renderizados, desktop, celular e capturas continuam **pendentes**. Não há novas capturas nem alegação de aprovação visual. Nenhuma imagem conceitual substitui essa validação.
+- Suíte completa `npm run test:e2e`: passou, incluindo 3 testes de qualidade, 34 verificações do receptor com ponte simulada, 14 de login web, visualizador desktop/web com transporte simulado, 65 de inventário/monitoramento, 3 testes de contagens e a suíte dedicada do dashboard.
+- Dashboard renderizado no Chromium em 1440×1050 e 390×844, claro e escuro, sem overflow horizontal da página. O gráfico tem rolagem própria no móvel.
+- Verificados: navegação por teclado até os detalhes, seleção de período, ausência de pesquisa no dashboard, menu sem Configurações/Auditoria, estado Online mesmo com sessão, carregamento, vazio, erro e recuperação.
+- Nenhum erro JavaScript ou de console inesperado detectado pelo teste. As respostas 503 intencionais do cenário de erro são distinguidas das falhas inesperadas.
+- Capturas reais do React compilado inspecionadas. Ajustado o menu lateral para que os rótulos “Em breve” não comprimam os ícones; build e suíte do dashboard repetidos após o ajuste e aprovados.
+- Dados de inventário e API das capturas são simulados e isolados, não dados reais de colaboradores. Essas verificações não homologam Windows nem acesso remoto real.
 
-Em terminal com permissão para navegador e porta local, dentro de `frontend/`:
+## Preview para avaliação
+
+Preview temporário em `http://127.0.0.1:4175/`, com proxy somente de `/api` para o backend local existente em `http://127.0.0.1:18080`. Nenhum serviço existente foi alterado. A configuração persistente Vite permanece intacta. Sem login, `/api/auth/me` retorna 401, como esperado. A tela de login real foi aberta no navegador sem erro JavaScript, sem usar ou registrar credenciais.
+
+O preview não é implantação e está limitado à máquina local. Após autenticação pelo usuário, usa os dados reais que o backend existente disponibilizar. Não foi feita autenticação automatizada com conta real.
+
+## Evidências
+
+Capturas em `.tools/dashboard-review/`: `desktop-light.png`, `desktop-dark.png`, `mobile-light.png`, `mobile-dark.png`, `empty.png`, `error.png`, `loading.png` e `preview-login.png`. Cópia para avaliação em `/home/agenda/uai-suporte-design-20261110/implementado/`.
+
+Para reproduzir os testes, dentro de `frontend/`:
 
 ```sh
 npm run build
 npm run test:e2e
-npm run preview -- --port 4175
 ```
 
-O preview usa o proxy existente para a API local configurada em Vite; necessita do backend local disponível para dados reais. Os testes interceptam as APIs e não dependem do laboratório. O teste dedicado (`npm run test:dashboard`) gera capturas reais do React compilado com dados simulados em `.tools/dashboard-review/`: desktop-light, desktop-dark, mobile-light, mobile-dark, empty, error e loading.
-
-Aguardar revisão do dashboard renderizado antes de implementar outras telas. Não considerar esta etapa visualmente homologada enquanto o bloqueio de execução não for resolvido.
+O teste dedicado `npm run test:dashboard` regenera as capturas com API simulada. A aprovação de design continua sendo do usuário; não avançar para outras telas até recebê-la. Sem push ou implantação.

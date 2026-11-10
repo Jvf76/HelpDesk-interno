@@ -679,3 +679,23 @@
     display:none
   }
 }
+
+.uai-shell nav button svg {
+  flex-shrink: 0;
+}
+.uai-shell nav button > span {
+  min-width: 0;
+  text-align: left;
+}
+.uai-shell nav button small {
+  margin-left: 0;
+  text-align: left;
+}
+.uai-shell nav button:disabled {
+  white-space: normal;
+}
+@media (max-width: 700px) {
+  .uai-shell nav button:disabled {
+    white-space: nowrap;
+  }
+}
