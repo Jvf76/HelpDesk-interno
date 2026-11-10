@@ -1468,3 +1468,9 @@
 @media(max-width:1250px) {
  .dash-signature .dash-chart text { font-size: 18px; }
 }
+.dash-zoom-controls { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.monitor .dash-zoom-controls button { font-size:12px; }
+.monitor .uai-dashboard .dash-zoom-status { min-height:40px; margin:10px 0 0; font-size:12px; }
+.dash-chart svg { cursor:zoom-in; }
+.dash-chart text[role=button]:focus-visible { outline:2px solid var(--dash-focus); outline-offset:3px; }
+.dash-chart text[aria-disabled=true] { cursor:default; }

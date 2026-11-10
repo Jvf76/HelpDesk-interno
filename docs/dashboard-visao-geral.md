@@ -80,3 +80,7 @@ A composição anterior foi substituída: disponibilidade em arco com valores te
 Capturas da interface real com respostas simuladas para revisão; os dados variados pertencem exclusivamente ao teste, não ao frontend de produção. Validar apresentação em 1440px, 1024px e 390px. A captura de tema espera a estabilização da pintura do navegador. Nenhuma mudança de backend, autenticação, consentimento ou motor remoto.
 
 Validação final: suíte completa do frontend aprovada (incluindo os dois modos do visualizador e 69 verificações de monitoramento), build aprovado e nenhuma mensagem inesperada de console no dashboard. Após ajustar o tamanho dos rótulos do gráfico em telas menores, build e testes do dashboard repetidos. Galeria: `/home/agenda/uai-suporte-design-20261110/assinatura/index.html`. A avaliação visual da nova composição permanece pendente com o responsável pelo produto.
+
+## Ampliação por data na Visão geral
+
+O gráfico de CPU/memória agora amplia o intervalo ao clicar na área do gráfico ou nas datas do eixo. Datas também aceitam Enter/Espaço. Cada ampliação reduz o intervalo para um quarto, com mínimo de um minuto; controles permitem voltar um nível ou restaurar o período selecionado. A troca do seletor limpa o zoom. Durante a busca, dados anteriores continuam montados com indicação de atualização, preservando a posição da página. Sem novos endpoints e sem capturas automáticas.

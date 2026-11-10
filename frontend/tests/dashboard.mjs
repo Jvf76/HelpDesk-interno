@@ -46,6 +46,26 @@ try {
  await page.getByLabel('Período dos gráficos').selectOption('24');
  await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
  assert(calls.some(x=>x.startsWith('/api/monitoring/series?')));
+ await page.getByText('Atualizando gráfico…',{exact:true}).waitFor({state:'hidden'});
+ const overviewDate=page.getByRole('button',{name:/Ampliar período em/}).nth(1);
+ await overviewDate.scrollIntoViewIfNeeded();
+ const overviewScroll=await page.evaluate(()=>scrollY);
+ const lastRange=()=>new URL('https://dashboard.test'+calls.filter(x=>x.startsWith('/api/monitoring/series?')).at(-1));
+ const initialRange=lastRange();
+ await overviewDate.click();
+ await page.getByRole('button',{name:'Voltar período',exact:true}).waitFor();
+ await page.getByText('Atualizando gráfico…',{exact:true}).waitFor({state:'hidden'});
+ const expandedRange=lastRange();
+ const duration=u=>Date.parse(u.searchParams.get('to'))-Date.parse(u.searchParams.get('from'));
+ assert(duration(expandedRange)<duration(initialRange),'Overview date should narrow the requested range');
+ assert(Math.abs(await page.evaluate(()=>scrollY)-overviewScroll)<3,'Overview zoom must preserve scroll');
+ await overviewDate.focus();await page.keyboard.press('Enter');
+ await page.getByText('Atualizando gráfico…',{exact:true}).waitFor({state:'hidden'});
+ assert(duration(lastRange())<duration(expandedRange),'Overview supports keyboard zoom');
+ await page.getByRole('button',{name:'Restaurar período completo',exact:true}).click();
+ await page.getByText('Atualizando gráfico…',{exact:true}).waitFor({state:'hidden'});
+ assert.equal(duration(lastRange()),24*3600000);
+
  // The exception rail must stay in the content grid, never overlap navigation.
  const rail=await page.locator('.dash-attention').boundingBox();
  const performance=await page.locator('.dash-performance').boundingBox();
