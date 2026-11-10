@@ -77,6 +77,11 @@ try {
  // Verify newly available tabs against the same existing API contracts.
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
  await page.getByRole('img',{name:'Uso de processamento e memória',exact:true}).waitFor();
+ for(const icon of await page.locator('.mon-charts svg.lucide').all()) {
+  const box=await icon.boundingBox();
+  assert(box&&box.width<=24&&box.height<=24,'Monitoring icons must keep their intrinsic size');
+ }
+
  const resources=page.getByRole('region',{name:'Uso de processamento e memória — período independente'});
  const availability=page.getByRole('region',{name:'Computadores online e offline',exact:true});
  const originalAvailability=await availability.locator('.mon-availability-counts').innerText();
@@ -134,6 +139,11 @@ try {
  process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'history-mobile.png'),fullPage:true});
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
  await page.getByRole('img',{name:'Uso de processamento e memória',exact:true}).waitFor();
+ for(const icon of await page.locator('.mon-charts svg.lucide').all()) {
+  const box=await icon.boundingBox();
+  assert(box&&box.width<=24&&box.height<=24,'Monitoring icons must keep their intrinsic size');
+ }
+
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  const mobileResources=page.getByRole('region',{name:'Uso de processamento e memória — período independente'});
  const mobilePoint=mobileResources.getByRole('img').locator('circle').nth(3);

@@ -26,3 +26,7 @@ Monitoramento apresenta “Computadores online e offline” e “Uso de processa
 ## Disponibilidade como contagem atual
 
 Por solicitação do usuário, o gráfico histórico Online/Offline foi substituído por dois contadores de estado atual, usando `/monitoring/summary`. As médias históricas por hora não são mais usadas para contar computadores. Contagens são inteiras, sem arredondar médias; resposta inválida é tratada como erro. Atualização automática a cada 30 segundos, ação de atualização manual e aviso de dados preservados em falha. CPU e memória permanecem como gráfico temporal independente. A classificação inclui sessões em Online e cadastros desativados em Offline, conforme contrato já usado na Visão geral.
+
+## Correção da escala dos ícones
+
+As regras antigas `.mon-charts svg` e `.mon-series svg` aplicavam largura de gráfico também aos ícones do novo resumo. Foram restritas a `svg[role=img]`, mantendo os ícones Lucide no tamanho definido pelo componente. O resumo de disponibilidade recebeu números e espaçamentos mais compactos. Regressão no navegador verifica largura e altura dos ícones em desktop e celular, junto das verificações existentes de temas e interação. Sem capturas.
