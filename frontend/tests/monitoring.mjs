@@ -14,7 +14,7 @@ try{for(const role of ['ADMIN','LEITURA']){
   else if(url.pathname==='/api/inventory/'+device.id&&method==='PUT'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');responsible=route.request().postDataJSON().responsible;}
   else if(url.pathname==='/api/inventory/'+device.id)body={device:{...device,responsible,windows_user:'WINDOWS/user'},latest:[],changes:[],connections:[],events:[],canConnect:role==='ADMIN'};
   else if(url.pathname==='/api/inventory/'+device.id+'/metrics')body={points:[{observed_at:new Date().toISOString(),cpu_pct:30,memory_pct:40,disk_free_pct:50}],resolution:'sample',truncated:false};
-  else if(url.pathname==='/api/monitoring/series')body={points:Array.from({length:6},(_,i)=>({observed_at:new Date(Date.now()-(5-i)*600000).toISOString(),online:1+i,offline:25-i,cpu_pct:20+i*4,memory_pct:45+i*2})),resolution:'sample',truncated:false};
+  else if(url.pathname==='/api/monitoring/series')body={points:Array.from({length:6},(_,i)=>({observed_at:new Date(Date.parse(url.searchParams.get("from"))+(Date.parse(url.searchParams.get("to"))-Date.parse(url.searchParams.get("from")))*i/5).toISOString(),online:1+i,offline:25-i,cpu_pct:20+i*4,memory_pct:45+i*2})),resolution:'sample',truncated:false};
   else if(url.pathname==='/api/activation-tokens'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');assert.equal(route.request().postDataJSON().recoverDeviceId,device.id);body={id:'test-token',token:'TEST-FIXTURE-NOT-A-REAL-TOKEN'};}
 
   else if(url.pathname==='/api/connections'&&method==='POST'){assert.equal(role,'ADMIN');assert.deepEqual(route.request().postDataJSON(),{code:device.public_code,mode:'CONTROL'});body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:'PENDING',mode:'CONTROL'};}
@@ -32,6 +32,22 @@ try{for(const role of ['ADMIN','LEITURA']){
  assert.equal(await page.locator('.mon-charts').count(),1);
  assert(calls.some(x=>x.startsWith('/api/monitoring/series')));
  assert.equal(await page.getByRole('button',{name:'Ativar computador',exact:true}).count(),0);checks+=4;
+ const chart=page.locator('.mon-series').first();
+ await chart.locator('circle').nth(2).hover();
+ assert.match(await chart.locator('.mon-chart-reading').innerText(),/\d{2}\/\d{2}\/\d{4}.*\d{2}:\d{2}:\d{2}/);
+ await chart.locator('circle').nth(2).click();
+ await page.getByRole('button',{name:'Voltar período',exact:true}).waitFor();
+ await chart.locator('circle').first().waitFor();
+ const query=new URL('https://support.test'+calls.filter(x=>x.startsWith('/api/monitoring/series')).at(-1));
+ assert.equal(Date.parse(query.searchParams.get('to'))-Date.parse(query.searchParams.get('from')),900000);
+ await chart.locator('circle').nth(2).focus();await page.keyboard.press('Enter');
+ await chart.locator('circle').first().waitFor();
+ await page.getByRole('button',{name:'Voltar período',exact:true}).click();
+ await chart.locator('circle').first().waitFor();
+ await page.getByRole('button',{name:'Restaurar período completo',exact:true}).click();
+ await chart.locator('circle').first().waitFor();
+ assert.equal(await page.getByRole('button',{name:'Voltar período',exact:true}).count(),0);checks+=5;
+
  if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});await page.screenshot({path:'../.tools/ui-redesign/light.png',fullPage:true});}
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();
  assert.equal(await page.locator('.monitor').getAttribute('data-theme'),'dark');
