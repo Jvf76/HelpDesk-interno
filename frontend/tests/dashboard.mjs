@@ -9,7 +9,7 @@ await fs.mkdir(out,{recursive:true});
 try {
  const page=await browser.newPage({viewport:{width:1440,height:1050}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
- let mode='normal',hold=false,release;let calls=[];
+ let historyFailure=false,historyPopulated=false;let mode='normal',hold=false,release;let calls=[];
  const devices=Array.from({length:5},(_,i)=>({id:`00000000-0000-4000-8000-00000000000${i}`,name:`UAI-LAB-00${i+1}`,public_code:`EXEMPLO-00${i+1}`,responsible:`Colaborador TESTE ${i+1}`,city:i%2?'Uberlândia':'Patos de Minas',department:'LAB',online:i!==4,state:i===1?'IN_SESSION':i===4?'OFFLINE':'ONLINE',cpu_pct:30+i,memory_pct:50+i,disk_free_pct:7+i,metric_at:new Date().toISOString(),alerts:[]}));
  await page.route('**/*',async route=>{
   const u=new URL(route.request().url());assert.equal(u.origin,'https://dashboard.test');
@@ -21,8 +21,11 @@ try {
    if(mode==='error'){await route.fulfill({status:503,contentType:'application/json',body:'{"message":"Falha simulada"}'});return;}
    if(u.pathname==='/api/monitoring/summary')body={counts:mode==='empty'?[]:[{state:'ONLINE',count:220},{state:'IN_SESSION',count:8},{state:'ERROR',count:3},{state:'OFFLINE',count:15},{state:'DISABLED',count:2}],totals:{total:mode==='empty'?0:248,alerts:12}};
    else if(u.pathname==='/api/inventory'){const filtered=u.searchParams.has('lowDisk')||u.searchParams.has('highCpu')||u.searchParams.has('highMemory');body={items:mode==='empty'?[]:devices.slice(0,Number(u.searchParams.get('size'))),total:mode==='empty'?0:filtered?6:248};}
-   else if(u.pathname==='/api/monitoring/series')body={points:mode==='empty'?[]:Array.from({length:12},(_,i)=>({observed_at:new Date(Date.now()-(11-i)*1800000).toISOString(),cpu_pct:[23,28,26,42,34,31,59,47,36,39,30,34][i],memory_pct:[48,49,51,50,56,54,63,60,57,58,61,59][i]})),resolution:'sample',truncated:false};
-   else if(u.pathname===`/api/inventory/${devices[0].id}`)body={device:devices[0],latest:[],changes:[],connections:[],events:[],canConnect:true};
+   else if(u.pathname==='/api/monitoring/series')body={points:mode==='empty'?[]:Array.from({length:12},(_,i)=>({observed_at:new Date(Date.now()-(11-i)*1800000).toISOString(),online:220+i,offline:28-i,silent:2,high_usage:6,cpu_pct:[23,28,26,42,34,31,59,47,36,39,30,34][i],memory_pct:[48,49,51,50,56,54,63,60,57,58,61,59][i]})),resolution:'sample',truncated:false};
+   else if(u.pathname===`/api/inventory/${devices[0].id}`){
+    if(historyFailure){await route.fulfill({status:503,contentType:'application/json',body:'{}'});return;}
+    body={device:devices[0],latest:[],changes:[],connections:historyPopulated?[{id:'demo-session',requested_at:new Date().toISOString(),status:'ENDED',result:'LOCAL_STOP',ended_at:new Date().toISOString()}]:[],events:historyPopulated?[{event_code:'AGENT_STARTED',observed_at:new Date().toISOString()}]:[],canConnect:true};
+   }
    else if(u.pathname.endsWith('/metrics'))body={points:[],resolution:'sample',truncated:false};
    else if(u.pathname.endsWith('/permissions')||u.pathname==='/api/users')body=[];
    else throw new Error('Unexpected API: '+u.pathname);
@@ -38,7 +41,7 @@ try {
  assert.match(await page.locator('.dash-stats').innerText(),/231/);
  assert.match(await page.locator('.dash-stats').innerText(),/17/);
  assert.equal(await page.getByRole('button',{name:'Detalhes',exact:true}).count(),0);
- assert(await page.getByRole('button',{name:/Histórico de acessos/}).isDisabled());
+ assert(await page.getByRole('button',{name:'Histórico de acessos',exact:true}).isEnabled());
  await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
  await page.getByLabel('Período dos gráficos').selectOption('24');
  await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
@@ -51,6 +54,45 @@ try {
  assert.match(await page.locator('.dash-pressure').innerText(),/CPU acima do limite/);
  await page.screenshot({path:path.join(out,'desktop-light.png'),fullPage:true});
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
+ // Verify newly available tabs against the same existing API contracts.
+ await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
+ await page.getByRole('img',{name:'Uso médio de recursos',exact:true}).waitFor();
+ await page.screenshot({path:path.join(out,'monitoring-dark.png'),fullPage:true});
+ await page.getByRole('button',{name:'Histórico de acessos',exact:true}).click();
+ await page.getByRole('heading',{name:'Nenhum acesso registrado',exact:true}).waitFor();
+ await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'access-history-empty.png'),fullPage:true});
+ historyFailure=true;
+ await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
+ await page.getByRole('button',{name:'Histórico de acessos',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'Não foi possível carregar o histórico'}).waitFor();
+ historyFailure=false;historyPopulated=true;
+ await page.getByRole('button',{name:'Tentar novamente',exact:true}).click();
+ await page.getByRole('cell',{name:'Equipe de TI',exact:true}).waitFor();
+ await page.getByText('AGENT_STARTED',{exact:true}).waitFor();
+ await page.screenshot({path:path.join(out,'access-history-dark.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);
+ await page.screenshot({path:path.join(out,'access-history-light.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);
+ historyPopulated=false;
+ await page.getByRole('button',{name:'Computadores',exact:true}).click();
+ await page.getByRole('button',{name:devices[0].name,exact:true}).waitFor();
+ await page.screenshot({path:path.join(out,'computers-dark.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);
+ await page.screenshot({path:path.join(out,'computers-light.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(out,'computers-mobile.png'),fullPage:true});
+ await page.getByRole('button',{name:'Histórico de acessos',exact:true}).click();
+ await page.getByRole('heading',{name:'Nenhum acesso registrado',exact:true}).waitFor();
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(out,'history-mobile.png'),fullPage:true});
+ await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
+ await page.getByRole('img',{name:'Uso médio de recursos',exact:true}).waitFor();
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(out,'monitoring-mobile.png'),fullPage:true});
+ await page.getByRole('button',{name:'Visão geral',exact:true}).click();
+ await page.getByRole('button',{name:devices[0].name,exact:true}).waitFor();
+ await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);
  await page.setViewportSize({width:1024,height:900});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.screenshot({path:path.join(out,'tablet-dark.png'),fullPage:true});
@@ -60,6 +102,12 @@ try {
  await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'mobile-light.png'),fullPage:true});
  const first=page.getByRole('button',{name:devices[0].name,exact:true});await first.focus();await page.keyboard.press('Enter');
  await page.getByRole('heading',{name:'Identificação e dados detectados'}).waitFor();
+ await page.screenshot({path:path.join(out,'detail-mobile.png'),fullPage:true});
+ await page.setViewportSize({width:1440,height:1050});
+ await page.screenshot({path:path.join(out,'detail-light.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);
+ await page.screenshot({path:path.join(out,'detail-dark.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});
  mode='empty';await page.reload();await page.getByRole('heading',{name:'Nenhum computador cadastrado'}).waitFor();await page.getByRole('heading',{name:'Sem métricas neste período'}).waitFor();await page.screenshot({path:path.join(out,'empty.png'),fullPage:true});
  mode='error';await page.reload();await page.getByText('Não foi possível atualizar o dashboard.',{exact:false}).waitFor();assert(await page.getByRole('button',{name:'Tentar novamente',exact:true}).count()>0);await page.screenshot({path:path.join(out,'error.png'),fullPage:true});
  mode='normal';await page.getByRole('button',{name:'Tentar novamente',exact:true}).first().click();await page.getByRole('button',{name:devices[0].name,exact:true}).waitFor();

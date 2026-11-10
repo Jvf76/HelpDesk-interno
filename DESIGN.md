@@ -13,3 +13,11 @@ Segunda faixa: atenção à esquerda e inventário à direita. Médias nunca sub
 Tema claro com superfícies brancas e painel de gráfico grafite; tema escuro com camadas grafite distintas. Vermelho institucional reservado à navegação selecionada. Números tabulares, foco visível, estados por texto e ícone. Em tablet, atenção/inventário ocupam a largura disponível; em celular os blocos se empilham e a tabela conserva leitura e interação por teclado.
 
 Capturas para apresentação usam dados fictícios de teste e devem ser identificadas como demonstração. Não expor dados de colaboradores reais. Escopo: somente Visão geral; backend, autenticação e motor remoto preservados. Aprovação da implementação permanece pendente.
+
+## Extensão às abas operacionais
+
+Após avaliação do dashboard, o usuário autorizou aplicar sua linguagem visual às demais abas. Menu e cabeçalho agora compartilham os mesmos estilos entre Visão geral, Computadores, Monitoramento, Histórico e detalhes.
+
+Computadores: superfície de inventário, pesquisa agrupada com filtros, linhas com identificação e disponibilidade por texto e ícone. Detalhes: dados detectados em grade, formulários administrativos e painéis de gráficos em grafite. Preservar ações e permissões existentes.
+
+Monitoramento: componente existente FleetOverview exposto em sua aba, com período, ampliação por ponto, retorno de zoom e tentativa novamente em erro. Histórico: consulta paginada de computadores seguida dos registros já expostos por inventory/{id}; até 100 sessões, alterações administrativas e eventos por equipamento. Não é auditoria global, não traz todos os eventos do sistema e não inventa evidências de primeiro frame ou controle.

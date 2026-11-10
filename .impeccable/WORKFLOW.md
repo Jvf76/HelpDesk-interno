@@ -3,14 +3,14 @@
 ## Preferência atual — substitui o fluxo anterior de imagens
 
 - Construir o design diretamente no código e avaliá-lo em funcionamento.
-- Implementar incrementalmente, uma tela por vez, aguardando aprovação antes de avançar para outra tela.
+- Implementar incrementalmente. Após a avaliação do dashboard, o usuário autorizou aplicar sua linguagem visual às demais abas do painel.
 - Não utilizar geração de imagem como substituto da implementação visual. As referências estáticas anteriores são histórico de exploração, não contratos de implementação.
 - Usar a identidade e a logo oficial da Uai em `frontend/public/brand/uai-logo.png`. Não usar marcas ou componentes copiados de outros produtos.
 - Validar a interface real em tema claro/escuro, desktop e resolução menor; verificar teclado, foco, contraste, estados vazios, carregamento, erros e recuperação; gerar capturas reais quando o ambiente permitir e informar limites de validação.
 
 ## Etapa autorizada
 
-Implementar somente o dashboard “Visão geral”. Preservar as demais telas e contratos existentes. Não alterar monitoramento completo, histórico de acessos, visualizador remoto, consentimento Windows, backend, banco, motor remoto ou regras de autenticação.
+Aplicar a linguagem visual aprovada na Visão geral às abas Computadores, Monitoramento e Histórico de acessos, incluindo detalhes do equipamento. Reutilizar contratos existentes; histórico inicialmente por computador, com limites explícitos. Preservar visualizador remoto, consentimento Windows, backend, banco, motor remoto e regras de autenticação.
 
 Menu inicial: Visão geral, Computadores, Monitoramento e Histórico de acessos. Não apresentar como funcionais destinos ainda não implementados. Auditoria não terá item separado; sua visualização futura pertencerá ao histórico. Não criar Configurações sem funções reais aprovadas.
 
@@ -25,3 +25,5 @@ Não repetir downloads do motor Impeccable nem contornar sua indisponibilidade. 
 ## Histórico de decisão
 
 A preferência inicial por imagens, as duas propostas estáticas e a aprovação de direção com ajustes foram substituídas pela solicitação de avaliar o dashboard implementado. A aprovação das imagens não representa aprovação do código nem autoriza avançar para outras telas.
+
+Autorização posterior: o usuário solicitou expressamente estender o design às outras abas após avaliar a implementação do dashboard.
