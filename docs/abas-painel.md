@@ -10,3 +10,11 @@ Autorizada após avaliação da Visão geral. Branch `feat/dashboard-visao-geral
 Validação com API simulada: navegação entre abas, consulta vazia e preenchida do histórico, erro e recuperação, gráficos, temas, telas desktop/móvel, teclado e console. A validação automatizada não equivale à homologação de sessões reais Windows.
 
 Build e suíte completa do frontend aprovados. Verificadas capturas claras/escuras, navegação por teclado existente e ausência de erros inesperados no console; novos testes cobrem histórico preenchido/vazio, falha e tentativa novamente. Galeria local em `/home/agenda/uai-suporte-design-20261110/abas/index.html`. Sem push ou implantação remota.
+
+## Períodos independentes e estabilidade de rolagem
+
+Cada gráfico de monitoramento e de recursos do equipamento tem seu próprio período, pilha de zoom, retorno, dados e recuperação de erro. Alterar CPU/memória não altera disponibilidade nem armazenamento. Durante consultas, o último gráfico e seu intervalo permanecem montados com aviso de atualização; controles e área de leitura reservam espaço para não reduzir a página e deslocar a rolagem.
+
+Rótulos maiores, cinco referências no eixo vertical, datas abreviadas no eixo horizontal, legenda contínua/tracejada e valores detalhados em texto. Gráficos continuam acessíveis por teclado. Testes de regressão verificam isolamento das consultas e estabilidade de scroll em clique desktop e Enter no celular. Capturas de testes agora exigem `UAI_CAPTURE_UI=1`; desativadas por padrão conforme preferência do usuário.
+
+Build e suíte completa aprovados após a correção. Novas verificações incluem alteração do seletor apenas de CPU/memória, ausência de nova consulta no gráfico vizinho, período independente do disco e estabilidade da posição vertical após zoom com mouse e teclado. Sem capturas geradas nesta validação.

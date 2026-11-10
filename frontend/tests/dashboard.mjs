@@ -21,7 +21,7 @@ try {
    if(mode==='error'){await route.fulfill({status:503,contentType:'application/json',body:'{"message":"Falha simulada"}'});return;}
    if(u.pathname==='/api/monitoring/summary')body={counts:mode==='empty'?[]:[{state:'ONLINE',count:220},{state:'IN_SESSION',count:8},{state:'ERROR',count:3},{state:'OFFLINE',count:15},{state:'DISABLED',count:2}],totals:{total:mode==='empty'?0:248,alerts:12}};
    else if(u.pathname==='/api/inventory'){const filtered=u.searchParams.has('lowDisk')||u.searchParams.has('highCpu')||u.searchParams.has('highMemory');body={items:mode==='empty'?[]:devices.slice(0,Number(u.searchParams.get('size'))),total:mode==='empty'?0:filtered?6:248};}
-   else if(u.pathname==='/api/monitoring/series')body={points:mode==='empty'?[]:Array.from({length:12},(_,i)=>({observed_at:new Date(Date.now()-(11-i)*1800000).toISOString(),online:220+i,offline:28-i,silent:2,high_usage:6,cpu_pct:[23,28,26,42,34,31,59,47,36,39,30,34][i],memory_pct:[48,49,51,50,56,54,63,60,57,58,61,59][i]})),resolution:'sample',truncated:false};
+   else if(u.pathname==='/api/monitoring/series')body={points:mode==='empty'?[]:Array.from({length:12},(_,i)=>({observed_at:new Date(Date.parse(u.searchParams.get('from'))+(Date.parse(u.searchParams.get('to'))-Date.parse(u.searchParams.get('from')))*i/11).toISOString(),online:220+i,offline:28-i,silent:2,high_usage:6,cpu_pct:[23,28,26,42,34,31,59,47,36,39,30,34][i],memory_pct:[48,49,51,50,56,54,63,60,57,58,61,59][i]})),resolution:'sample',truncated:false};
    else if(u.pathname===`/api/inventory/${devices[0].id}`){
     if(historyFailure){await route.fulfill({status:503,contentType:'application/json',body:'{}'});return;}
     body={device:devices[0],latest:[],changes:[],connections:historyPopulated?[{id:'demo-session',requested_at:new Date().toISOString(),status:'ENDED',result:'LOCAL_STOP',ended_at:new Date().toISOString()}]:[],events:historyPopulated?[{event_code:'AGENT_STARTED',observed_at:new Date().toISOString()}]:[],canConnect:true};
@@ -52,15 +52,34 @@ try {
  assert(rail.y>=performance.y+performance.height,'Attention rail overlaps performance');
  assert.match(await page.locator('.dash-availability-visual').innerText(),/93/);
  assert.match(await page.locator('.dash-pressure').innerText(),/CPU acima do limite/);
- await page.screenshot({path:path.join(out,'desktop-light.png'),fullPage:true});
- await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'desktop-light.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'desktop-dark.png'),fullPage:true});
  // Verify newly available tabs against the same existing API contracts.
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
  await page.getByRole('img',{name:'Uso médio de recursos',exact:true}).waitFor();
- await page.screenshot({path:path.join(out,'monitoring-dark.png'),fullPage:true});
+ const resources=page.getByRole('region',{name:'Uso médio de recursos — período independente'});
+ const availability=page.getByRole('region',{name:'Disponibilidade dos computadores — período independente'});
+ const originalAvailability=await availability.locator('svg').innerHTML();
+ const target=resources.locator('circle').nth(4);
+ await target.scrollIntoViewIfNeeded();
+ const scrollBefore=await page.evaluate(()=>scrollY);
+ const requestsBefore=calls.filter(x=>x.startsWith('/api/monitoring/series?')).length;
+ await target.click();
+ await resources.getByText('Atualizando período…').waitFor({state:'hidden'});
+ assert(Math.abs(await page.evaluate(()=>scrollY)-scrollBefore)<3,'Zoom must preserve vertical scroll');
+ assert.equal(await availability.locator('svg').innerHTML(),originalAvailability,'Other graph must not change');
+ assert.equal(calls.filter(x=>x.startsWith('/api/monitoring/series?')).length,requestsBefore+1);
+ assert(await availability.getByRole('button',{name:'Voltar período',exact:true}).isDisabled());
+ assert(await resources.getByRole('button',{name:'Voltar período',exact:true}).isEnabled());
+ await resources.getByRole('combobox').selectOption('24');
+ await resources.getByText('Atualizando período…').waitFor({state:'hidden'});
+ assert.equal(await availability.getByRole('combobox').inputValue(),'1');
+ assert.equal(await resources.getByRole('combobox').inputValue(),'24');
+
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'monitoring-dark.png'),fullPage:true});
  await page.getByRole('button',{name:'Histórico de acessos',exact:true}).click();
  await page.getByRole('heading',{name:'Nenhum acesso registrado',exact:true}).waitFor();
- await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'access-history-empty.png'),fullPage:true});
+ await page.waitForTimeout(350);process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'access-history-empty.png'),fullPage:true});
  historyFailure=true;
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
  await page.getByRole('button',{name:'Histórico de acessos',exact:true}).click();
@@ -69,53 +88,70 @@ try {
  await page.getByRole('button',{name:'Tentar novamente',exact:true}).click();
  await page.getByRole('cell',{name:'Equipe de TI',exact:true}).waitFor();
  await page.getByText('AGENT_STARTED',{exact:true}).waitFor();
- await page.screenshot({path:path.join(out,'access-history-dark.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'access-history-dark.png'),fullPage:true});
  await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);
- await page.screenshot({path:path.join(out,'access-history-light.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'access-history-light.png'),fullPage:true});
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);
  historyPopulated=false;
  await page.getByRole('button',{name:'Computadores',exact:true}).click();
  await page.getByRole('button',{name:devices[0].name,exact:true}).waitFor();
- await page.screenshot({path:path.join(out,'computers-dark.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'computers-dark.png'),fullPage:true});
  await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);
- await page.screenshot({path:path.join(out,'computers-light.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'computers-light.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.screenshot({path:path.join(out,'computers-mobile.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'computers-mobile.png'),fullPage:true});
  await page.getByRole('button',{name:'Histórico de acessos',exact:true}).click();
  await page.getByRole('heading',{name:'Nenhum acesso registrado',exact:true}).waitFor();
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.screenshot({path:path.join(out,'history-mobile.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'history-mobile.png'),fullPage:true});
  await page.getByRole('button',{name:'Monitoramento',exact:true}).click();
  await page.getByRole('img',{name:'Uso médio de recursos',exact:true}).waitFor();
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.screenshot({path:path.join(out,'monitoring-mobile.png'),fullPage:true});
+ const mobileResources=page.getByRole('region',{name:'Uso médio de recursos — período independente'});
+ const mobilePoint=mobileResources.locator('circle').nth(3);
+ await mobilePoint.scrollIntoViewIfNeeded();await mobilePoint.focus();
+ const mobileScroll=await page.evaluate(()=>scrollY);
+ await page.keyboard.press('Enter');
+ await mobileResources.getByText('Atualizando período…').waitFor({state:'hidden'});
+ assert(Math.abs(await page.evaluate(()=>scrollY)-mobileScroll)<3,'Keyboard zoom must preserve mobile scroll');
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'monitoring-mobile.png'),fullPage:true});
  await page.getByRole('button',{name:'Visão geral',exact:true}).click();
  await page.getByRole('button',{name:devices[0].name,exact:true}).waitFor();
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);
  await page.setViewportSize({width:1024,height:900});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.screenshot({path:path.join(out,'tablet-dark.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'tablet-dark.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.screenshot({path:path.join(out,'mobile-dark.png'),fullPage:true});
- await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);await page.screenshot({path:path.join(out,'mobile-light.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'mobile-dark.png'),fullPage:true});
+ await page.getByRole('button',{name:'Ativar tema claro'}).click();await page.waitForTimeout(350);process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'mobile-light.png'),fullPage:true});
  const first=page.getByRole('button',{name:devices[0].name,exact:true});await first.focus();await page.keyboard.press('Enter');
  await page.getByRole('heading',{name:'Identificação e dados detectados'}).waitFor();
- await page.screenshot({path:path.join(out,'detail-mobile.png'),fullPage:true});
+ const deviceCpu=page.getByRole('region',{name:'CPU e memória RAM — período independente'});
+ const deviceDisk=page.getByRole('region',{name:'Espaço livre em disco — período independente'});
+ await deviceCpu.getByText('Atualizando período…').waitFor({state:'hidden'});
+ await deviceDisk.getByText('Atualizando período…').waitFor({state:'hidden'});
+ const metricRequests=calls.filter(x=>x.includes('/metrics?')).length;
+ await deviceCpu.getByRole('combobox').selectOption('6');
+ await deviceCpu.getByText('Atualizando período…').waitFor({state:'hidden'});
+ assert.equal(await deviceDisk.getByRole('combobox').inputValue(),'1');
+ assert.equal(calls.filter(x=>x.includes('/metrics?')).length,metricRequests+1);
+
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'detail-mobile.png'),fullPage:true});
  await page.setViewportSize({width:1440,height:1050});
- await page.screenshot({path:path.join(out,'detail-light.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'detail-light.png'),fullPage:true});
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();await page.waitForTimeout(350);
- await page.screenshot({path:path.join(out,'detail-dark.png'),fullPage:true});
+ process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'detail-dark.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});
- mode='empty';await page.reload();await page.getByRole('heading',{name:'Nenhum computador cadastrado'}).waitFor();await page.getByRole('heading',{name:'Sem métricas neste período'}).waitFor();await page.screenshot({path:path.join(out,'empty.png'),fullPage:true});
- mode='error';await page.reload();await page.getByText('Não foi possível atualizar o dashboard.',{exact:false}).waitFor();assert(await page.getByRole('button',{name:'Tentar novamente',exact:true}).count()>0);await page.screenshot({path:path.join(out,'error.png'),fullPage:true});
+ mode='empty';await page.reload();await page.getByRole('heading',{name:'Nenhum computador cadastrado'}).waitFor();await page.getByRole('heading',{name:'Sem métricas neste período'}).waitFor();process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'empty.png'),fullPage:true});
+ mode='error';await page.reload();await page.getByText('Não foi possível atualizar o dashboard.',{exact:false}).waitFor();assert(await page.getByRole('button',{name:'Tentar novamente',exact:true}).count()>0);process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'error.png'),fullPage:true});
  mode='normal';await page.getByRole('button',{name:'Tentar novamente',exact:true}).first().click();await page.getByRole('button',{name:devices[0].name,exact:true}).waitFor();
  // Reload in a delayed state to prove loading is not presented as empty or zero.
  await page.route('**/api/inventory?**',async route=>{await new Promise(r=>setTimeout(r,1000));await route.fallback();});
- await page.reload();await page.getByText('Carregando resumo e computadores…').waitFor();await page.screenshot({path:path.join(out,'loading.png'),fullPage:true});
+ await page.reload();await page.getByText('Carregando resumo e computadores…').waitFor();process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:path.join(out,'loading.png'),fullPage:true});
  await page.getByRole('button',{name:devices[0].name,exact:true}).waitFor();
  // Deliberate 503s produce browser network console errors; no other errors allowed.
  assert.deepEqual(errors.filter(e=>!e.includes('503')),[]);
- console.log('Dashboard: normal/empty/error/retry/loading, keyboard, themes and responsive checks passed. API simulated. Captures: '+out);
+ console.log('Dashboard: normal/empty/error/retry/loading, keyboard, themes and responsive checks passed. API simulated. Optional captures: '+out);
 } finally {await browser.close();}

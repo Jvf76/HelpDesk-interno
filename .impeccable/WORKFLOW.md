@@ -6,7 +6,7 @@
 - Implementar incrementalmente. Após a avaliação do dashboard, o usuário autorizou aplicar sua linguagem visual às demais abas do painel.
 - Não utilizar geração de imagem como substituto da implementação visual. As referências estáticas anteriores são histórico de exploração, não contratos de implementação.
 - Usar a identidade e a logo oficial da Uai em `frontend/public/brand/uai-logo.png`. Não usar marcas ou componentes copiados de outros produtos.
-- Validar a interface real em tema claro/escuro, desktop e resolução menor; verificar teclado, foco, contraste, estados vazios, carregamento, erros e recuperação; gerar capturas reais quando o ambiente permitir e informar limites de validação.
+- Validar a interface real em tema claro/escuro, desktop e resolução menor; verificar teclado, foco, contraste, estados vazios, carregamento, erros e recuperação; informar limites de validação. A avaliação do usuário será diretamente no painel funcionando; não gerar capturas nem galerias automaticamente. Capturas somente quando solicitadas explicitamente. Ao executar testes existentes, desativar a geração opcional de capturas, preservando as verificações funcionais.
 
 ## Etapa autorizada
 

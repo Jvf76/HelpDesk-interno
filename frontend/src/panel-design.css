@@ -90,3 +90,26 @@
 .monitor.uai-panel-design .mon-search input { padding-left:39px; }
 .monitor.uai-panel-design .mon-state::before { display:none; }
 .monitor.uai-panel-design .mon-observability>.mon-list-title { margin-bottom:22px; }
+/* Each chart keeps its controls, plot and reading area mounted while fetching. */
+.monitor.uai-panel-design .mon-metric-panel { min-width:0; }
+.monitor.uai-panel-design .mon-metric-controls { display:flex; align-items:end; justify-content:space-between; gap:16px; padding:16px 0; }
+.monitor.uai-panel-design .mon-metric-controls label { min-width:180px; }
+.monitor.uai-panel-design .mon-metric-buttons { display:flex; gap:8px; flex-wrap:wrap; }
+.monitor.uai-panel-design .mon-metric-status { min-height:64px; font-size:13px; color:var(--dash-muted); display:flex; align-items:center; }
+.monitor.uai-panel-design .mon-series { margin:0; }
+.monitor.uai-panel-design .mon-series svg { height:300px; min-width:600px; max-height:none; }
+.monitor.uai-panel-design .mon-series { overflow-x:auto; }
+.monitor.uai-panel-design .mon-series text { font-size:15px; }
+.monitor.uai-panel-design .mon-series-empty { height:300px; margin:0; }
+.monitor.uai-panel-design .mon-chart-reading { min-height:76px; font-size:14px; line-height:1.7; padding-top:12px; }
+.monitor.uai-panel-design .mon-legend { flex-wrap:wrap; font-size:14px; gap:12px 24px; }
+.monitor.uai-panel-design .mon-legend i { width:22px; height:0; border-radius:0; }
+.monitor.uai-panel-design .mon-resource-history .mon-charts { grid-template-columns:1fr; }
+@media(max-width:700px) {
+ .monitor.uai-panel-design .mon-metric-controls { flex-direction:column; align-items:stretch; }
+ .monitor.uai-panel-design .mon-metric-status { min-height:100px; }
+ .monitor.uai-panel-design .mon-metric-buttons button { white-space:normal; flex:1; }
+ .monitor.uai-panel-design .mon-chart-reading { min-height:120px; }
+}
+.monitor.uai-panel-design .mon-series-empty { height:376px; }
+@media(max-width:700px) { .monitor.uai-panel-design .mon-series-empty { height:420px; } }

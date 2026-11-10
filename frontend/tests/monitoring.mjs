@@ -31,13 +31,13 @@ try{for(const role of ['ADMIN','LEITURA']){
  await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
  assert.equal(await page.locator('.dash-monitor-grid').count(),1);
  assert(calls.some(x=>x.startsWith('/api/monitoring/series')));checks+=2;
- if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});await page.screenshot({path:'../.tools/ui-redesign/light.png',fullPage:true});}
+ if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/light.png',fullPage:true});}
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();
  assert.equal(await page.locator('.monitor').getAttribute('data-theme'),'dark');
  await page.reload();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
  assert.equal(await page.locator('.monitor').getAttribute('data-theme'),'dark');checks+=2;
 
- if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});await page.screenshot({path:'../.tools/ui-redesign/desktop.png',fullPage:true});}
+ if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/desktop.png',fullPage:true});}
 
  await page.getByRole('button',{name:'Computadores',exact:true}).click();
  assert.equal(await page.locator('.mon-stats').count(),0);assert.equal(await page.locator('.mon-charts').count(),0);
@@ -45,7 +45,7 @@ try{for(const role of ['ADMIN','LEITURA']){
  await page.getByRole('button',{name:'Ações de '+device.name,exact:true}).click();
  await page.getByRole('button',{name:'Conectar',exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Conectar',exact:true}).isEnabled(),role==='ADMIN');checks++;
- if(role==='ADMIN'){assert(await page.getByRole('button',{name:'Gerar ativação',exact:true}).isDisabled());await page.screenshot({path:'../.tools/ui-redesign/actions.png',fullPage:true});checks++;}
+ if(role==='ADMIN'){assert(await page.getByRole('button',{name:'Gerar ativação',exact:true}).isDisabled());process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/actions.png',fullPage:true});checks++;}
  else{assert.equal(await page.getByRole('button',{name:'Gerar ativação',exact:true}).count(),0);checks++;}
  await page.keyboard.press('Escape');
  assert.equal(await page.getByRole('dialog').count(),0);checks++;
@@ -56,12 +56,12 @@ try{for(const role of ['ADMIN','LEITURA']){
  await page.getByRole('img',{name:'CPU e memória RAM',exact:true}).waitFor();await page.getByRole('img',{name:'Espaço livre em disco',exact:true}).waitFor();assert(calls.some(x=>x.startsWith('/api/inventory/'+device.id+'/metrics?')));checks+=3;
  const resourceHistory=page.getByRole('region',{name:'Histórico de recursos'});
  assert.equal(await resourceHistory.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
- assert.equal(await page.getByLabel('Período do histórico').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(34, 43, 57)');
+ assert.equal(await page.getByLabel('Período do histórico — CPU e memória RAM').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(34, 43, 57)');
  if(role==='ADMIN'){
-  await resourceHistory.screenshot({path:'../.tools/ui-redesign/history-dark.png'});
+  process.env.UAI_CAPTURE_UI === "1" && await resourceHistory.screenshot({path:'../.tools/ui-redesign/history-dark.png'});
   await page.getByRole('button',{name:'Ativar tema claro'}).click();
-  assert.equal(await page.getByLabel('Período do histórico').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
-  await resourceHistory.screenshot({path:'../.tools/ui-redesign/history-light.png'});
+  assert.equal(await page.getByLabel('Período do histórico — CPU e memória RAM').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+  process.env.UAI_CAPTURE_UI === "1" && await resourceHistory.screenshot({path:'../.tools/ui-redesign/history-light.png'});
   await page.getByRole('button',{name:'Ativar tema escuro'}).click();
  }
  checks+=2;
@@ -102,9 +102,9 @@ try{for(const role of ['ADMIN','LEITURA']){
  await page.waitForTimeout(400);
  assert(calls.some(x=>x.includes('city=Cidade+TESTE')));checks++;
  await page.setViewportSize({width:390,height:844});
- if(role==='ADMIN'){await page.screenshot({path:'../.tools/ui-redesign/mobile.png',fullPage:true});}
+ if(role==='ADMIN'){process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/mobile.png',fullPage:true});}
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks++;
- if(role==='ADMIN')await page.screenshot({path:'../.tools/ui-redesign/mobile.png',fullPage:true});
+ if(role==='ADMIN')process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/mobile.png',fullPage:true});
  if(role==='ADMIN'){
   device.revoked=true;device.online=false;device.state='DISABLED';
   await page.reload();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
