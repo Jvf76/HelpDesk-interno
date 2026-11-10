@@ -25,33 +25,16 @@ try{for(const role of ['ADMIN','LEITURA']){
   else throw new Error('Unexpected endpoint '+url.pathname);
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
  });
- await page.goto('https://support.test/');await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();await page.getByRole('button',{name:device.public_code,exact:true}).waitFor();
- assert(calls.some(x=>x.startsWith('/api/inventory?page=0&size=25')));assert(!calls.some(x=>x==='/api/devices'));checks+=2;
+ await page.goto('https://support.test/');await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
+ assert(calls.some(x=>x.startsWith('/api/inventory?page=0&size=5')));assert(!calls.some(x=>x==='/api/devices'));checks+=2;
  assert.equal(await page.getByRole('img',{name:'Uai Telecom'}).count(),1);
- await page.getByRole('img',{name:'Disponibilidade dos computadores'}).waitFor();
- assert.equal(await page.locator('.mon-charts').count(),1);
- assert(calls.some(x=>x.startsWith('/api/monitoring/series')));
- assert.equal(await page.getByRole('button',{name:'Ativar computador',exact:true}).count(),0);checks+=4;
- const chart=page.locator('.mon-series').first();
- await chart.locator('circle').nth(2).hover();
- assert.match(await chart.locator('.mon-chart-reading').innerText(),/\d{2}\/\d{2}\/\d{4}.*\d{2}:\d{2}:\d{2}/);
- await chart.locator('circle').nth(2).click();
- await page.getByRole('button',{name:'Voltar período',exact:true}).waitFor();
- await chart.locator('circle').first().waitFor();
- const query=new URL('https://support.test'+calls.filter(x=>x.startsWith('/api/monitoring/series')).at(-1));
- assert.equal(Date.parse(query.searchParams.get('to'))-Date.parse(query.searchParams.get('from')),900000);
- await chart.locator('circle').nth(2).focus();await page.keyboard.press('Enter');
- await chart.locator('circle').first().waitFor();
- await page.getByRole('button',{name:'Voltar período',exact:true}).click();
- await chart.locator('circle').first().waitFor();
- await page.getByRole('button',{name:'Restaurar período completo',exact:true}).click();
- await chart.locator('circle').first().waitFor();
- assert.equal(await page.getByRole('button',{name:'Voltar período',exact:true}).count(),0);checks+=5;
-
+ await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
+ assert.equal(await page.locator('.dash-monitor-grid').count(),1);
+ assert(calls.some(x=>x.startsWith('/api/monitoring/series')));checks+=2;
  if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});await page.screenshot({path:'../.tools/ui-redesign/light.png',fullPage:true});}
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();
  assert.equal(await page.locator('.monitor').getAttribute('data-theme'),'dark');
- await page.reload();await page.getByRole('button',{name:device.public_code,exact:true}).waitFor();
+ await page.reload();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
  assert.equal(await page.locator('.monitor').getAttribute('data-theme'),'dark');checks+=2;
 
  if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});await page.screenshot({path:'../.tools/ui-redesign/desktop.png',fullPage:true});}
@@ -101,7 +84,8 @@ try{for(const role of ['ADMIN','LEITURA']){
  else{assert.equal(await page.getByRole('button',{name:'Salvar dados administrativos',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Revogar dispositivo',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Conectar',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Usuários',exact:true}).count(),0);checks+=4;}
  await page.getByRole('button',{name:'Visão geral',exact:true}).click();
  await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();
- assert.equal(await page.locator('.mon-charts').count(),1);checks++;
+ assert.equal(await page.locator('.dash-monitor-grid').count(),1);checks++;
+ await page.getByRole('button',{name:'Computadores',exact:true}).click();
  await page.getByRole('button',{name:'Filtros',exact:true}).click();
  await page.getByLabel('Cidade',{exact:true}).fill('Cidade TESTE');
  await page.waitForTimeout(400);
@@ -112,7 +96,7 @@ try{for(const role of ['ADMIN','LEITURA']){
  if(role==='ADMIN')await page.screenshot({path:'../.tools/ui-redesign/mobile.png',fullPage:true});
  if(role==='ADMIN'){
   device.revoked=true;device.online=false;device.state='DISABLED';
-  await page.reload();await page.getByRole('button',{name:device.public_code,exact:true}).waitFor();
+  await page.reload();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
   await page.getByRole('button',{name:'Computadores',exact:true}).click();
   await page.getByRole('button',{name:'Ações de '+device.name,exact:true}).click();
   await page.getByRole('button',{name:'Gerar ativação',exact:true}).click();

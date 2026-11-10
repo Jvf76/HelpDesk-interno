@@ -7,8 +7,9 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test:e2e": "node --test tests/quality.mjs && node tests/desktop.mjs && node tests/web-login.mjs && node tests/viewer.mjs && node tests/viewer.mjs --web && node tests/monitoring.mjs",
-    "prebuild": "node scripts/sync-viewer.mjs"
+    "test:e2e": "node --test tests/quality.mjs && node tests/desktop.mjs && node tests/web-login.mjs && node tests/viewer.mjs && node tests/viewer.mjs --web && node tests/monitoring.mjs && npm run test:dashboard",
+    "prebuild": "node scripts/sync-viewer.mjs",
+    "test:dashboard": "node --test tests/dashboard-data.mjs && node tests/dashboard.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

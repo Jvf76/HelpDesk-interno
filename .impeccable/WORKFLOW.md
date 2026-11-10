@@ -1,31 +1,27 @@
-# Fluxo visual aprovado pelo usuário
+# Fluxo de trabalho do Uai Suporte
 
-Confirmado em 10/11/2026. A configuração técnica do caminho de construção fica exclusivamente em `config.json`.
+## Preferência atual — substitui o fluxo anterior de imagens
 
-Para landing pages e páginas de apresentação:
+- Construir o design diretamente no código e avaliá-lo em funcionamento.
+- Implementar incrementalmente, uma tela por vez, aguardando aprovação antes de avançar para outra tela.
+- Não utilizar geração de imagem como substituto da implementação visual. As referências estáticas anteriores são histórico de exploração, não contratos de implementação.
+- Usar a identidade e a logo oficial da Uai em `frontend/public/brand/uai-logo.png`. Não usar marcas ou componentes copiados de outros produtos.
+- Validar a interface real em tema claro/escuro, desktop e resolução menor; verificar teclado, foco, contraste, estados vazios, carregamento, erros e recuperação; gerar capturas reais quando o ambiente permitir e informar limites de validação.
 
-1. Criar primeiro uma proposta visual em imagem usando a identidade oficial da Uai Telecom.
-2. Apresentar a imagem para avaliação do usuário.
-3. Aguardar aprovação explícita ou pedidos de ajuste; silêncio não é aprovação.
-4. Somente após aprovação implementar a página em código.
-5. Seguir fielmente a referência aprovada, preservando responsividade, acessibilidade e funcionamento.
+## Etapa autorizada
 
-Telas internas do painel administrativo, documentos e componentes funcionais podem ser construídos diretamente em código.
+Implementar somente o dashboard “Visão geral”. Preservar as demais telas e contratos existentes. Não alterar monitoramento completo, histórico de acessos, visualizador remoto, consentimento Windows, backend, banco, motor remoto ou regras de autenticação.
 
-Usar a logo oficial da Uai já fornecida. Verificar o arquivo antes de gerar a referência; se indisponível, solicitá-lo novamente. Não usar imagens, logotipos ou identidade de outras empresas.
+Menu inicial: Visão geral, Computadores, Monitoramento e Histórico de acessos. Não apresentar como funcionais destinos ainda não implementados. Auditoria não terá item separado; sua visualização futura pertencerá ao histórico. Não criar Configurações sem funções reais aprovadas.
 
-Consultar este documento antes de criar ou implementar páginas de apresentação. Este fluxo não autoriza alterações funcionais no produto por si só.
+Dashboard sem pesquisa e sem “Localizar computador”; pesquisa por nome/código fica em Computadores. Identificação “Equipe de TI”. Contabilizar sessões separadamente da disponibilidade; tabelas do dashboard usam Online/Offline com texto e ícone e acesso aos detalhes pela linha, com alternativa de teclado. Preservar temas, recursos, alertas de armazenamento e estados reais de dados.
 
-## Etapa atual: auditoria e referências do Uai Suporte
+## Segurança do trabalho
 
-Por solicitação explícita do usuário, também as telas internas desta etapa precisam de referência visual e aprovação antes de implementação. Começar pelo dashboard administrativo, que orientará o sistema visual das demais telas.
+Verificar Git antes de editar, preservar alterações anteriores, trabalhar em branch isolada quando possível. Não apagar nem reverter trabalho existente. Reutilizar componentes e contratos, sem endpoints fictícios. Não fazer push sem autorização. Não implantar em produção implicitamente.
 
-Auditar a interface existente; produzir referências estáticas e explicar decisões e aderência ao PRODUCT.md. Aguardar aprovação por tela. No máximo três alternativas quando uma escolha importante exigir opções, com recomendação clara.
+Não repetir downloads do motor Impeccable nem contornar sua indisponibilidade. Aplicar instruções locais e registrar limitações específicas. A indisponibilidade do Live não impede implementação convencional e validação por navegador permitido.
 
-É permitido criar protótipo descartável isolado do frontend real, sem APIs reais, sem credenciais e exclusivamente para aprovação visual. Não alterar funcionalidades, backend, banco, autenticação, consentimento ou motor remoto. Não baixar o motor Impeccable por fontes alternativas nem contornar falhas. Seguir as instruções locais permitidas; informar limitações específicas dos comandos indisponíveis.
+## Histórico de decisão
 
-Direção solicitada: moderna, corporativa, limpa, confiável, com identidade própria da Uai. Gráficos podem adotar convenções de monitoramento sem copiar identidade ou componentes de outros produtos. Não usar identidade AnyDesk/TeamViewer, gradientes excessivos, efeitos decorativos que atrapalhem a leitura ou textos genéricos.
-
-Sequência: dashboard; login TI; lista e detalhes de computadores; métricas; histórico; solicitação; visualizador; estados de conexão; consentimento; barra e contorno de sessão ativa. Cada tela mantém a aprovação pendente até resposta explícita.
-
-Versionar PRODUCT.md e este WORKFLOW.md preservando alterações existentes. Não fazer push sem autorização do usuário.
+A preferência inicial por imagens, as duas propostas estáticas e a aprovação de direção com ajustes foram substituídas pela solicitação de avaliar o dashboard implementado. A aprovação das imagens não representa aprovação do código nem autoriza avançar para outras telas.
