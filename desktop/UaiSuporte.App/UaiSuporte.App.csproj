@@ -10,6 +10,7 @@
  <ItemGroup>
   <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
   <ProjectReference Include="../UaiSuporte.Transport/UaiSuporte.Transport.csproj" />
+  <ProjectReference Include="../UaiSuporte.Printers/UaiSuporte.Printers.csproj" />
     <ProjectReference Include="../UaiSuporte.Receiving/UaiSuporte.Receiving.csproj" />
   <EmbeddedResource Include="../../frontend/dist/**/*" LogicalName="ui/%(RecursiveDir)%(Filename)%(Extension)" />
   <EmbeddedResource Include="Viewer/**/*" LogicalName="viewer/%(RecursiveDir)%(Filename)%(Extension)" />

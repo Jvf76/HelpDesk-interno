@@ -9,6 +9,11 @@ internal static class Program
 {
     [STAThread] static void Main(string[] args) {
         ApplicationConfiguration.Initialize();
+        if(args.Contains("--printer-lab")) {
+            using var printerMutex=new Mutex(true,"Local\\UaiSuportePrinterLab-"+Environment.UserName,out bool printerFirst);
+            if(!printerFirst){MessageBox.Show("O teste de impressoras já está aberto na bandeja.");return;}
+            Application.Run(new PrinterLab());return;
+        }
         try { UaiSuporte.Agent.Provisioning.RequireCommittedInstallation(); } catch { MessageBox.Show("Instalação incompleta. Conclua o assistente ou a reversão pelo desinstalador antes de abrir o Uai Suporte."); return; }
         using var mutex = new Mutex(true,"Local\\UaiSuporteUnified-"+Environment.UserName,out bool first);
         if (!first) { MessageBox.Show("O Uai Suporte já está em execução. Abra pelo ícone junto ao relógio do Windows."); return; }
@@ -57,6 +62,7 @@ sealed class SupportWindow : Form
         menu.Items.Add("Copiar Meu código",null,(_,_)=>{if(!string.IsNullOrWhiteSpace(receiver.DeviceCode))Clipboard.SetText(receiver.DeviceCode);});
         var trayState=menu.Items.Add("Conectando");trayState.Enabled=false;
         menu.Opening+=(_,_)=>trayState.Text=receiver.ConnectionState;
+        menu.Items.Add("Impressoras • teste LAB",null,(_,_)=>System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!,"--printer-lab"){UseShellExecute=true}));
         menu.Items.Add("Ver versão",null,(_,_)=>MessageBox.Show(this,"Uai Suporte "+Assembly.GetExecutingAssembly().GetName().Version,"Uai Suporte"));
         menu.Items.Add("Sair da interface",null,(_,_)=>{if(receiver.SessionActive&&MessageBox.Show(this,"O atendimento será encerrado. O monitoramento continuará pelo serviço. Sair da interface?","Uai Suporte",MessageBoxButtons.YesNo)!=DialogResult.Yes)return;exitRequested=true;Close();});
         tray.ContextMenuStrip=menu;tray.DoubleClick+=(_,_)=>ShowMain();

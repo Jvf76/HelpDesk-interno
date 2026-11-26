@@ -27,3 +27,7 @@ Não repetir downloads do motor Impeccable nem contornar sua indisponibilidade. 
 A preferência inicial por imagens, as duas propostas estáticas e a aprovação de direção com ajustes foram substituídas pela solicitação de avaliar o dashboard implementado. A aprovação das imagens não representa aprovação do código nem autoriza avançar para outras telas.
 
 Autorização posterior: o usuário solicitou expressamente estender o design às outras abas após avaliar a implementação do dashboard.
+
+## Teste de impressoras autorizado em 26/11/2026
+
+O responsável autorizou implementar no aplicativo o teste automático único das 14h de 26/11/2026 (Brasília). Escopo LAB local: coleta Lexmark, PDF, SMTP e estado persistido, com ativação explícita no PC. A exceção permite alterar o aplicativo Windows para esse módulo, preservando o serviço de acesso remoto, consentimento, backend e banco. Pacote portátil para executar o modo de impressoras sem sobrescrever a instalação existente. Não representa distribuição às lojas ou homologação do contador. Ver `docs/impressoras-teste-20261126.md`.
