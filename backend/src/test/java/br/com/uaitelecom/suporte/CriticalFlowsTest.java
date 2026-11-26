@@ -139,6 +139,30 @@ class CriticalFlowsTest {
     return json.readTree(result.andReturn().getResponse().getContentAsString());
   }
 
+  @Test
+  @org.springframework.transaction.annotation.Transactional
+  void printerBatchCollectsFromAssignedDeviceAndDownloadsItsPdf() throws Exception {
+    mvc.perform(req("GET","/api/printers",aliceAccount,null)).andExpect(status().isForbidden());
+    mvc.perform(req("PUT","/api/printers/lexmark-lab/collector",adminAccount,Map.of("collector",device)))
+        .andExpect(status().isOk());
+    String batch=result(mvc.perform(req("POST","/api/printers/batches",techAccount,null))
+        .andExpect(status().isOk())).get("batch").asText();
+    var pending=result(mvc.perform(get("/api/desktop/printer-jobs")
+        .header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device)).andExpect(status().isOk()));
+    assertEquals(1,pending.size());
+    String upload="/api/desktop/printer-jobs/"+pending.get(0).get("id").asText();
+    byte[] pdf="%PDF-1.4 test fixture".getBytes();
+    mvc.perform(post(upload).header("Authorization","Bearer test-agent-identity")
+        .header("X-Uai-Device",device).content(pdf)).andExpect(status().isOk());
+    var bytes=mvc.perform(req("GET","/api/printers/batches/"+batch+"/download",techAccount,null))
+        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+    try(var zip=new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(bytes))){
+      assertEquals("lexmark-lab.pdf",zip.getNextEntry().getName());
+      assertArrayEquals(pdf,zip.readAllBytes());
+      assertNull(zip.getNextEntry());
+    }
+  }
+
   UUID request(Account a, String mode) {
     return (UUID) service.request(a.actor(), device, mode).get("id");
   }

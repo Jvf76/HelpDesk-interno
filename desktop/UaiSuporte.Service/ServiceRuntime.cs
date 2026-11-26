@@ -28,6 +28,7 @@ sealed class ServiceRuntime:IDisposable {
  }}
  async Task Watchdog(CancellationToken ct){try{while(!ct.IsCancellationRequested){lock(motorLock){if((mesh.Running||accepted.HasValue)&&(!lease.Live(lease.Pid,Environment.TickCount64)||!LocalChannel.PresenterCurrent(lease.Pid)||(mesh.Running&&mesh.SessionId!=LocalChannel.ActiveSession())||(accepted.HasValue&&lease.Displayed!=accepted)))StopMotor("PRESENTER_LOST_STOP");}await Task.Delay(500,ct);}}catch(OperationCanceledException){}catch{StopMotor("WATCHDOG_FAILED");}}
  async Task NetworkLoop(CancellationToken ct){try{while(!ct.IsCancellationRequested){await gate.WaitAsync(ct);try{await Tick(ct);}catch(HttpRequestException e){blocked=e.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;fault=e.HttpRequestError==HttpRequestError.SecureConnectionError?"Certificado TLS recusado.":blocked?"Credencial revogada. Solicite reativação administrativa.":"Servidor indisponível.";state="Offline";StopMotor("NETWORK_FAILED_STOP");schedule.Failure(DateTimeOffset.UtcNow,Random.Shared.NextDouble()*.2-.1);nextRequests=Environment.TickCount64+5000;}catch(Exception e) when(e is not OperationCanceledException){state="Offline";fault="Componente interno indisponível. Consulte a TI.";StopMotor("LOCAL_COMPONENT_FAILED");schedule.Failure(DateTimeOffset.UtcNow,0);}finally{gate.Release();}await Task.Delay(1000,ct);}}catch(OperationCanceledException){}finally{StopMotor("SERVICE_STOP");}}
+ Task printerPoll=Task.CompletedTask;
  async Task Tick(CancellationToken ct){
   if(identity==null||blocked)return;
   var now=DateTimeOffset.UtcNow;bool due=schedule.Due(now);
@@ -50,6 +51,7 @@ sealed class ServiceRuntime:IDisposable {
    using var response=await http.PostAsJsonAsync("api/agent/presence",new{machineName=Environment.MachineName,os=System.Runtime.InteropServices.RuntimeInformation.OSDescription,windowsUser=LocalChannel.ActiveUser(),appVersion=typeof(ReceiverWindow).Assembly.GetName().Version!.ToString(),agentVersion="legacy-1.2.6 LAB",internalIp=MonitoringCollector.InternalIp(),uptimeSeconds=Environment.TickCount64/1000,health=bound?mesh.Running?"OK":"STOPPED":"UNBOUND",serviceState="RUNNING",observedAt=now,metrics=sample},ct);
    response.EnsureSuccessStatusCode();using var config=JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));schedule.Configure(config.RootElement.GetProperty("heartbeatSeconds").GetInt32(),config.RootElement.GetProperty("metricsSeconds").GetInt32());schedule.Success(now,collect,Random.Shared.NextDouble()*.2-.1);state="Online";fault="";
   }
+  if(due && printerPoll.IsCompleted) printerPoll=PrinterQueue.Poll(http,ct);
   if(!mesh.Running||Environment.TickCount64<nextRequests)return;
   nextRequests=Environment.TickCount64+5000;
   long pollEpoch;lock(motorLock)pollEpoch=stopFence.Epoch;

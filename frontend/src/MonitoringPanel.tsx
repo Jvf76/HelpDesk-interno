@@ -1,3 +1,4 @@
+import { PrinterPanel } from "./PrinterPanel";
 import { FleetOverview } from "./FleetOverview";
 import { AccessHistory } from "./AccessHistory";
 import {DeviceMetricHistory} from "./DeviceMetricHistory";
@@ -5,7 +6,7 @@ import { useEffect, useState } from "react";
 import { api,date,type User,type Device } from "./api";
 import { ActivationAdmin } from "./ActivationAdmin";
 import "./monitoring.css";
-import { Monitor, LayoutDashboard, Activity, History, LogOut, Search, SlidersHorizontal, Plus, ChevronRight, ShieldCheck, Moon, Sun, CheckCircle2, CircleOff } from "lucide-react";
+import { Printer, Monitor, LayoutDashboard, Activity, History, LogOut, Search, SlidersHorizontal, Plus, ChevronRight, ShieldCheck, Moon, Sun, CheckCircle2, CircleOff } from "lucide-react";
 import { DashboardOverview } from "./DashboardOverview";
 import { DeviceActions } from "./DeviceActions";
 import { WebSession } from "./WebSession";
@@ -38,11 +39,12 @@ export function MonitoringPanel({user,onLogout}:{user:User;onLogout:()=>void}){
  const field=(setter:(v:string)=>void)=>(e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement>)=>{setter(e.target.value);setPage(0);};
  return <div className="monitor uai-shell uai-panel-design" data-theme={theme}>
  <aside className="mon-sidebar"><div className="mon-brand"><img src="/brand/uai-logo.png" alt="Uai Telecom"/><div><b>Uai Suporte</b><small>Acesso remoto interno</small></div></div>
- <nav aria-label="Painel"><button aria-current={section==="home"?"page":undefined} onClick={()=>navigate("home")}><LayoutDashboard size={18}/>Visão geral</button><button aria-current={section==="computers"?"page":undefined} onClick={()=>navigate("computers")}><Monitor size={18}/>Computadores</button><button aria-current={section==="monitoring"?"page":undefined} onClick={()=>navigate("monitoring")}><Activity size={18}/><span>Monitoramento</span></button><button aria-current={section==="history"?"page":undefined} onClick={()=>navigate("history")}><History size={18}/><span>Histórico de acessos</span></button></nav>
+ <nav aria-label="Painel"><button aria-current={section==="home"?"page":undefined} onClick={()=>navigate("home")}><LayoutDashboard size={18}/>Visão geral</button><button aria-current={section==="computers"?"page":undefined} onClick={()=>navigate("computers")}><Monitor size={18}/>Computadores</button><button aria-current={section==="printers"?"page":undefined} onClick={()=>navigate("printers")}><Printer size={18}/>Impressoras</button><button aria-current={section==="monitoring"?"page":undefined} onClick={()=>navigate("monitoring")}><Activity size={18}/><span>Monitoramento</span></button><button aria-current={section==="history"?"page":undefined} onClick={()=>navigate("history")}><History size={18}/><span>Histórico de acessos</span></button></nav>
  <div className="mon-sidebar-foot"><ShieldCheck size={18}/><div>Ambiente interno<small>On-Premises • LAB</small></div></div></aside>
- <div className="mon-workspace"><header className="mon-header"><span><Monitor size={18}/>{selected?"Detalhes do computador":section==="home"?"Visão geral":section==="computers"?"Computadores":section==="monitoring"?"Monitoramento":section==="history"?"Histórico de acessos":section==="users"?"Usuários":"Configurações"}</span><div className="mon-account"><button aria-label={theme==="light"?"Ativar tema escuro":"Ativar tema claro"} title={theme==="light"?"Tema escuro":"Tema claro"} onClick={()=>setTheme(theme==="light"?"dark":"light")}>{theme==="light"?<Moon size={18}/>:<Sun size={18}/>}</button><span className="mon-avatar">TI</span><div><b>Equipe de TI</b><small>Painel interno</small></div><button aria-label="Sair" title="Sair" onClick={()=>void run(async()=>{await api("/auth/logout","POST",{});onLogout();})}><LogOut size={17}/></button></div></header>
+ <div className="mon-workspace"><header className="mon-header"><span><Monitor size={18}/>{selected?"Detalhes do computador":section==="home"?"Visão geral":section==="computers"?"Computadores":section==="printers"?"Impressoras":section==="monitoring"?"Monitoramento":section==="history"?"Histórico de acessos":section==="users"?"Usuários":"Configurações"}</span><div className="mon-account"><button aria-label={theme==="light"?"Ativar tema escuro":"Ativar tema claro"} title={theme==="light"?"Tema escuro":"Tema claro"} onClick={()=>setTheme(theme==="light"?"dark":"light")}>{theme==="light"?<Moon size={18}/>:<Sun size={18}/>}</button><span className="mon-avatar">TI</span><div><b>Equipe de TI</b><small>Painel interno</small></div><button aria-label="Sair" title="Sair" onClick={()=>void run(async()=>{await api("/auth/logout","POST",{});onLogout();})}><LogOut size={17}/></button></div></header>
  <main>{error&&<div role="alert" className="mon-error">{error}<button onClick={()=>setError("")}>Fechar aviso</button></div>}{message&&<p role="status">{message}</p>}
  {section==="home"&&!selected&&<DashboardOverview onOpen={id=>{setSelected(id);setDetail(null);}} onComputers={()=>navigate("computers")}/> }
+ {section==="printers"&&!selected&&<PrinterPanel/>}
  {section==="monitoring"&&!selected&&<div className="panel-monitoring"><div className="mon-page-title"><div><h1>Monitoramento</h1><p>Disponibilidade e consumo ao longo do tempo.</p></div><span className="mon-update">Coletas atualizadas a cada 30 s</span></div><FleetOverview/></div>}
  {section==="history"&&!selected&&<AccessHistory onOpen={id=>{setSelected(id);setDetail(null);}}/>}
  {section==="computers"&&!selected&&<>
