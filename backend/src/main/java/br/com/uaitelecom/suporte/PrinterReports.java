@@ -32,22 +32,22 @@ class PrinterReports {
   }
   record PrinterInput(@NotBlank @Size(max=100) String label,@Size(max=60) String serial){}
   void admin(HttpServletRequest r){Security.require(Security.actor(r).admin(),"Apenas administrador.");}
-  void log(String id,String action,Object before,Object after){
-    db.exec("INSERT INTO printer_change VALUES (?,?,?,?,?,?)",UUID.randomUUID(),id,action,Objects.toString(before,null),Objects.toString(after,null),OffsetDateTime.now());
+  void log(HttpServletRequest r,String id,String action,Object before,Object after){
+    db.exec("INSERT INTO printer_change(id,printer_id,action,before_value,after_value,changed_at,actor_id) VALUES (?,?,?,?,?,?,?)",UUID.randomUUID(),id,action,Objects.toString(before,null),Objects.toString(after,null),OffsetDateTime.now(),Security.actor(r).id());
   }
   @PostMapping("/printers") @Transactional
   Map<String,String> create(@Valid @RequestBody PrinterInput input,HttpServletRequest r){
     admin(r);String id=UUID.randomUUID().toString();
     db.exec("INSERT INTO printer(id,label,serial,supported) VALUES(?,?,?,FALSE)",id,input.label().strip(),ActivationController.optional(input.serial()));
-    log(id,"PRINTER_CREATED",null,input.label().strip());return Map.of("id",id);
+    log(r,id,"PRINTER_CREATED",null,input.label().strip());return Map.of("id",id);
   }
   @PutMapping("/printers/{id}") @Transactional
   void edit(@PathVariable String id,@Valid @RequestBody PrinterInput input,HttpServletRequest r){
     admin(r);var p=db.one("SELECT * FROM printer WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
     String label=input.label().strip(),serial=ActivationController.optional(input.serial());
     Security.require(!Boolean.TRUE.equals(p.get("supported"))||Objects.equals(serial,p.get("serial")),"A série identifica o equipamento homologado.");
-    if(!Objects.equals(p.get("label"),label))log(id,"label",p.get("label"),label);
-    if(!Objects.equals(p.get("serial"),serial))log(id,"serial",p.get("serial"),serial);
+    if(!Objects.equals(p.get("label"),label))log(r,id,"label",p.get("label"),label);
+    if(!Objects.equals(p.get("serial"),serial))log(r,id,"serial",p.get("serial"),serial);
     db.exec("UPDATE printer SET label=?,serial=? WHERE id=?",label,serial,id);
   }
   @DeleteMapping("/printers/{id}") @Transactional
@@ -56,7 +56,7 @@ class PrinterReports {
     if(p.get("removed_at")!=null)return;
     db.exec("UPDATE printer SET collector=NULL,removed_at=? WHERE id=?",OffsetDateTime.now(),id);
     db.exec("UPDATE printer_job SET status='CANCELLED' WHERE printer_id=? AND status='WAITING'",id);
-    log(id,"PRINTER_REMOVED",p.get("label"),null);
+    log(r,id,"PRINTER_REMOVED",p.get("label"),null);
   }
   record Binding(UUID collector){}
   @PutMapping("/printers/{id}/collector") @Transactional
@@ -66,7 +66,7 @@ class PrinterReports {
     var p=db.one("SELECT collector FROM printer WHERE id=? AND removed_at IS NULL AND supported=TRUE FOR UPDATE",id);
     if(Objects.equals(p.get("collector"),b.collector()))return;
     db.exec("UPDATE printer SET collector=? WHERE id=?",b.collector(),id);
-    log(id,"collector",p.get("collector"),b.collector());
+    log(r,id,"collector",p.get("collector"),b.collector());
   }
   @PostMapping("/printers/batches") @Transactional
   Map<String,Object> request(HttpServletRequest r){

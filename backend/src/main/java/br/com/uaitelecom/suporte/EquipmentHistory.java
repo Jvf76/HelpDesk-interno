@@ -43,22 +43,40 @@ class EquipmentHistory {
     if(page<0)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     if(kind.equals("printers")){
       Security.require(Security.actor(r).staff(),"Acesso da TI necessário.");
-      return db.list("SELECT action,before_value,after_value,changed_at FROM printer_change WHERE printer_id=? ORDER BY changed_at DESC,id LIMIT 51 OFFSET ?",id,page*50L);
+      return db.list("SELECT c.action,c.before_value,c.after_value,c.changed_at,u.login AS actor_login FROM printer_change c LEFT JOIN app_user u ON u.id=c.actor_id WHERE printer_id=? ORDER BY changed_at DESC,c.id LIMIT 51 OFFSET ?",id,page*50L);
     }
     if(!kind.equals("computers"))throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-    UUID device=UUID.fromString(id);
-    return db.list("""
-        SELECT action,before_value,after_value,changed_at FROM (
-          SELECT action,NULL AS before_value,NULL AS after_value,created_at AS changed_at,id
-            FROM audit_event WHERE resource_id=? AND action IN
-            ('DEVICE_CREATED','DEVICE_REMOVED','DEVICE_REVOKED','DEVICE_RECOVERY_ISSUED','DEVICE_UNREGISTERED_LOCALLY','PERMISSION_GRANTED','PERMISSION_REVOKED')
-          UNION ALL
-          SELECT field_name,old_value,new_value,changed_at,id FROM device_change WHERE device_id=?
-          UNION ALL
-          SELECT CASE WHEN t.target_id IS NULL THEN 'DEVICE_ACTIVATED' ELSE 'DEVICE_REACTIVATED' END,NULL,NULL,a.created_at,a.id
-            FROM activation_token t JOIN audit_event a ON a.resource_id=CAST(t.id AS VARCHAR) AND a.action='ACTIVATION_USED'
-            WHERE t.device_id=?
-        ) h ORDER BY changed_at DESC,id LIMIT 51 OFFSET ?
-        """,id,device,device,page*50L);
+    return db.list("SELECT action,before_value,after_value,changed_at,u.login AS actor_login FROM ("+COMPUTER_EVENTS+
+        ") h LEFT JOIN app_user u ON CAST(u.id AS VARCHAR)=h.actor_key WHERE device_key=? ORDER BY changed_at DESC,h.id LIMIT 51 OFFSET ?",UUID.fromString(id).toString(),page*50L);
   }
+
+  @GetMapping("/equipment-history/computers/events")
+  List<Map<String,Object>> computerEvents(@RequestParam(defaultValue="0") int page,HttpServletRequest r){
+    MonitoringService.reader(Security.actor(r));
+    if(page<0)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    // Page by computer so all changes to one computer stay together.
+    return db.list("WITH events AS ("+COMPUTER_EVENTS+"""
+        ), ranked AS (
+          SELECT device_key,DENSE_RANK() OVER (ORDER BY MAX(changed_at) DESC,device_key) AS pos
+          FROM events GROUP BY device_key
+        )
+        SELECT d.id,COALESCE(NULLIF(d.friendly_name,''),d.name) AS name,d.public_code AS code,
+               h.action,h.changed_at,h.before_value,h.after_value,u.login AS actor_login
+        FROM ranked g JOIN events h ON h.device_key=g.device_key JOIN device d ON CAST(d.id AS VARCHAR)=g.device_key
+        LEFT JOIN app_user u ON CAST(u.id AS VARCHAR)=h.actor_key
+        WHERE g.pos>? AND g.pos<=? ORDER BY g.pos,h.changed_at DESC,h.id
+        """,page*10L,page*10L+11);
+
+  }
+
+  private static final String COMPUTER_EVENTS="""
+      SELECT resource_id AS device_key,action,NULL AS before_value,NULL AS after_value,created_at AS changed_at,id,actor AS actor_key
+        FROM audit_event WHERE action IN
+        ('DEVICE_CREATED','DEVICE_REMOVED','DEVICE_REVOKED','DEVICE_RECOVERY_ISSUED','DEVICE_UNREGISTERED_LOCALLY','PERMISSION_GRANTED','PERMISSION_REVOKED')
+      UNION ALL
+      SELECT CAST(device_id AS VARCHAR),field_name,old_value,new_value,changed_at,id,CAST(admin_id AS VARCHAR) FROM device_change
+      UNION ALL
+      SELECT CAST(t.device_id AS VARCHAR),CASE WHEN t.target_id IS NULL THEN 'DEVICE_ACTIVATED' ELSE 'DEVICE_REACTIVATED' END,NULL,NULL,a.created_at,a.id,CAST(t.issued_by AS VARCHAR)
+        FROM activation_token t JOIN audit_event a ON a.resource_id=CAST(t.id AS VARCHAR) AND a.action='ACTIVATION_USED'
+      """;
 }

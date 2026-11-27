@@ -34,10 +34,9 @@ O sucesso depende de permitir suporte com consentimento explícito, mostrar o es
 
 ### Conta, autorização e auditoria
 
-- Haverá apenas um perfil funcional no painel: equipe de TI.
-- Todos os usuários da equipe de TI poderão acessar todos os computadores cadastrados, sempre sujeitos ao consentimento local.
-- O painel utilizará uma conta compartilhada da equipe de TI, protegida por senha forte.
-- O histórico atribuirá as ações à equipe de TI, sem identificar individualmente o técnico que utilizou a conta. A interface e a auditoria não devem prometer identificação individual inexistente.
+- A administração cadastra contas individuais em Usuários, com nome, login, senha e perfil. As permissões de cada conta seguem o perfil e as autorizações de acesso ao equipamento.
+- A conta compartilhada da equipe de TI continua disponível. A auditoria identifica a conta autenticada em cada alteração. Quando a conta é compartilhada, só é possível atribuir a ação àquela conta.
+- O histórico de computadores agrupa os eventos por equipamento, incluindo os removidos, com data, conta de origem e valores anteriores e novos quando disponíveis. A ativação local identifica separadamente a conta que autorizou o token.
 - O painel concentra inventário, identificação do colaborador, cidade, setor, monitoramento de CPU, memória e armazenamento, administração, auditoria e histórico das sessões.
 
 ### Consentimento e permissões por sessão

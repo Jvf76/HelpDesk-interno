@@ -968,6 +968,10 @@ class CriticalFlowsTest {
     mvc.perform(req("GET","/api/monitoring/summary",adminAccount,null)).andExpect(jsonPath("$.totals.total").value(1));
     mvc.perform(req("GET","/api/equipment-history/computers/removed",adminAccount,null)).andExpect(jsonPath("$[0].id").value(id));
     var events=result(mvc.perform(req("GET","/api/equipment-history/computers/"+id+"/events",adminAccount,null)).andExpect(status().isOk()));
+    var history=result(mvc.perform(req("GET","/api/equipment-history/computers/events",adminAccount,null)).andExpect(status().isOk()));
+    assertTrue(history.findValuesAsText("action").containsAll(List.of("responsible","DEVICE_ACTIVATED","DEVICE_REMOVED")));
+    assertTrue(history.findValuesAsText("id").contains(id));
+    assertTrue(history.findValuesAsText("actor_login").contains("admin"));
     var names=events.findValuesAsText("action");
     assertTrue(names.containsAll(List.of("responsible","DEVICE_ACTIVATED","DEVICE_REMOVED")));
     assertEquals(1,Collections.frequency(names,"DEVICE_REMOVED"));

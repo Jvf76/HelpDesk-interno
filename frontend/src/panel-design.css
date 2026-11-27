@@ -190,3 +190,27 @@
 }
 
 .equipment-audit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+
+.monitor .equipment-audit-dialog {
+ width:min(36rem,calc(100% - 2rem)); max-height:80dvh; box-sizing:border-box;
+ margin:auto; padding:0; border:1px solid var(--dash-line); border-radius:14px;
+ background:var(--dash-surface); color:var(--dash-text); white-space:normal; text-align:start;
+}
+.equipment-audit-dialog[open] { display:flex; flex-direction:column; }
+.equipment-audit-dialog::backdrop { background:rgb(10 16 24 / .55); }
+.equipment-audit-dialog header,.equipment-audit-dialog footer {
+ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px;
+}
+.equipment-audit-dialog header > div { display:block; min-width:0; }
+.equipment-audit-dialog header { height:auto; background:var(--dash-surface); border-bottom:1px solid var(--dash-line); }
+.equipment-audit-dialog h2 { margin:4px 0 0; font-size:1.2rem; overflow-wrap:anywhere; }
+.equipment-audit-body { overflow:auto; overscroll-behavior:contain; padding:0 20px; }
+.equipment-audit-body ol { margin:0; padding:0; list-style:none; }
+.equipment-audit-body li { padding:14px 0; overflow-wrap:anywhere; }
+.equipment-audit-body li+li,.equipment-audit-dialog footer { border-top:1px solid var(--dash-line); }
+.equipment-audit-body li p { margin:3px 0; font-size:.85rem; }
+.equipment-audit-body dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:8px 0 0; }
+.equipment-audit-body dt { font-size:.8rem; color:var(--dash-muted); }
+.equipment-audit-body dd { margin:0; }
+.computer-change-group { margin:18px 0; padding:14px 16px; border:1px solid var(--dash-line); border-radius:9px; }
+.computer-change-group h3 { margin:0; font-size:1rem; overflow-wrap:anywhere; }

@@ -2,13 +2,18 @@
 import { chromium } from 'playwright';import fs from 'node:fs/promises';import path from 'node:path';import assert from 'node:assert/strict';
 const browser=await chromium.launch({headless:true});let checks=0;
 try{for(const role of ['ADMIN','LEITURA']){
- const page=await browser.newPage({viewport:{width:1200,height:832}});const calls=[];const browserErrors=[];page.on('pageerror',e=>browserErrors.push(e.message));let responsible='Pessoa TESTE';let sessionPhase='PENDING',launches=0,releaseLaunch;
+ const page=await browser.newPage({viewport:{width:1200,height:832}});const calls=[];const browserErrors=[];page.on('pageerror',e=>browserErrors.push(e.message));const directory=[];let responsible='Pessoa TESTE';let sessionPhase='PENDING',launches=0,releaseLaunch;
  const device={id:'11111111-1111-4111-8111-111111111111',public_code:'TEST00000001',name:'WINDOWS-TESTE',friendly_name:'Computador TESTE',responsible,city:'Cidade TESTE',department:'LAB',os:'Windows TESTE',online:true,revoked:false,state:'ONLINE',alerts:[],last_seen:new Date().toISOString(),cpu_pct:30,memory_pct:40,disk_free_pct:50,app_version:'teste',agent_version:'teste'};
  await page.route('**/*',async route=>{const url=new URL(route.request().url());assert.equal(url.origin,'https://support.test');
   if(url.pathname==='/remote-viewer/index.html'){await route.fulfill({contentType:'text/html',body:'<html><body>Controlador simulado</body></html>'});return;}
   if(!url.pathname.startsWith('/api/')){const f=path.join(path.resolve('dist'),url.pathname==='/'?'index.html':url.pathname);await route.fulfill({body:await fs.readFile(f),contentType:f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.png')?'image/png':'text/html'});return;}
   calls.push(url.pathname+url.search);let body={};const method=route.request().method();
   if(url.pathname==='/api/auth/me')body={id:'me',name:'Usuário TESTE',role,csrf:'test-csrf'};
+  else if(url.pathname==='/api/printers')body={printers:[{id:'lex',label:'Lexmark laboratório'},{id:'ric',label:'Ricoh laboratório'}],collectors:[],jobs:[]};
+  else if(url.pathname==='/api/equipment-history/computers/events')body=[{id:device.id,name:device.friendly_name,code:device.public_code,action:'responsible',actor_login:'ti.teste',before_value:'Ana',after_value:'Bruna',changed_at:'2026-01-20T14:00:00Z'}];
+  else if(url.pathname==='/api/equipment-history/computers/'+device.id+'/events')body=[{action:'DEVICE_CREATED',before_value:null,after_value:null,changed_at:'2026-01-20T14:00:00Z'}];
+  else if(url.pathname==='/api/equipment-history/printers/lex/events')body=[{action:'label',before_value:'Anterior',after_value:'Lexmark laboratório',changed_at:'2026-01-20T14:00:00Z'}];
+  else if(url.pathname==='/api/equipment-history/printers/ric/events')body=[];
   else if(url.pathname==='/api/inventory')body={items:[{...device,responsible}],total:26,page:Number(url.searchParams.get('page')),size:25};
   else if(url.pathname==='/api/monitoring/insights')body={daily:[],health:[],activity:[],top:[]};
   else if(url.pathname==='/api/monitoring/summary')body={counts:[{state:'ONLINE',count:1},{state:'OFFLINE',count:25}],totals:{total:26,alerts:0,silent:0},versions:[{version:'teste',count:26}]};
@@ -22,7 +27,12 @@ try{for(const role of ['ADMIN','LEITURA']){
   else if(url.pathname==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4/stop')body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:'ENDED',ended_at:new Date().toISOString()};
   else if(url.pathname==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4/launch'){launches++;assert.equal(sessionPhase,'CONSENTED');sessionPhase='READY';if(launches===2)await new Promise(resolve=>releaseLaunch=resolve);body={authCookie:'fixture-only',viewOnly:false,expiresAt:Date.now()+60000};}
   else if(url.pathname==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4')body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:sessionPhase,mode:'CONTROL'};
-  else if(url.pathname==='/api/users' ||url.pathname.endsWith('/permissions'))body=[];
+  else if(url.pathname==='/api/users'&&method==='POST'){
+   assert.equal(role,'ADMIN');const u=route.request().postDataJSON();assert.equal(u.role,'LEITURA');
+   directory.push({id:'fixture',name:u.name,login:u.login,role:u.role,active:true});body={id:'fixture'};
+  }
+  else if(url.pathname==='/api/users')body=directory;
+  else if(url.pathname.endsWith('/permissions'))body=[];
   else throw new Error('Unexpected endpoint '+url.pathname);
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
  });
@@ -40,7 +50,42 @@ try{for(const role of ['ADMIN','LEITURA']){
 
  if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/desktop.png',fullPage:true});}
 
+ if(role==='ADMIN'){
+  await page.getByRole('button',{name:'Usuários',exact:true}).click();
+  await page.getByRole('button',{name:'Criar usuário',exact:true}).click();
+  await page.getByLabel('Nome completo').fill('Pessoa de teste');
+  await page.getByLabel('Login',{exact:true}).fill('pessoa.teste');
+  await page.getByLabel('Senha inicial',{exact:false}).fill('fixture-only-test-value');
+  await page.getByRole('button',{name:'Salvar usuário'}).click();
+  await page.getByRole('cell',{name:'pessoa.teste'}).waitFor();checks++;
+ }
  await page.getByRole('button',{name:'Computadores',exact:true}).click();
+ await page.getByRole('button',{name:'Histórico de alterações'}).click();
+ const changes=page.getByRole('dialog',{name:'Histórico de alterações'});
+ await changes.getByText('Colaborador',{exact:true}).waitFor();
+ await changes.getByRole('heading',{name:device.friendly_name}).waitFor();
+ await changes.getByText('Bruna',{exact:true}).waitFor();
+ await changes.getByText(/ti\.teste/).waitFor();
+ assert.equal(await changes.getByRole('button',{name:/Auditoria de/}).count(),0);
+ await changes.getByRole('button',{name:'Fechar',exact:true}).click();checks+=2;
+ const auditButton=page.getByRole('button',{name:'Auditoria de '+device.friendly_name,exact:true});
+ await auditButton.click();
+ const audit=page.getByRole('dialog',{name:'Auditoria de '+device.friendly_name});
+ await audit.getByText('Computador cadastrado',{exact:true}).waitFor();
+ await page.keyboard.press('Escape');
+ await audit.waitFor({state:'detached'});
+ assert(await auditButton.evaluate(button=>document.activeElement===button));checks++;
+ if(role==='ADMIN'){
+  await page.getByRole('button',{name:'Impressoras',exact:true}).click();
+  for(const [name,event] of [['Lexmark laboratório','Nome da impressora'],['Ricoh laboratório','Nenhum evento de cadastro disponível.']]){
+   await page.getByRole('button',{name:'Auditoria de '+name}).click();
+   const modal=page.getByRole('dialog',{name:'Auditoria de '+name});
+   await modal.getByText(event,{exact:true}).waitFor();
+   if(name.startsWith('Ricoh'))assert.equal(await modal.getByText('Nome da impressora').count(),0);
+   await modal.getByRole('button',{name:'Fechar'}).click();checks++;
+  }
+  await page.getByRole('button',{name:'Computadores',exact:true}).click();
+ }
  assert.equal(await page.locator('.mon-stats').count(),0);assert.equal(await page.locator('.mon-charts').count(),0);
  assert.equal(await page.getByRole('button',{name:'Ativar computador',exact:true}).count(),role==='ADMIN'?1:0);checks+=3;
  await page.getByRole('button',{name:'Ações de '+device.name,exact:true}).click();
