@@ -134,11 +134,11 @@ class MeshEngine implements RemoteEngine {
     return json.convertValue(result, new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String,Object>>(){});
   }
 
-  public Share create(String node, String guest, boolean viewOnly) {
+  public Share create(String node, String guest, boolean viewOnly, long loginExpiresAt) {
     var capabilities = command(Map.of("action", "uaiSessionCapabilities"));
-    if (capabilities.path("version").asInt() != 3
+    if (capabilities.path("version").asInt() != 4
         || !capabilities.path("renderAck").asBoolean()
-        || capabilities.path("activeSeconds").asInt()!=60
+        || !capabilities.path("loginBoundLifetime").asBoolean()
         || capabilities.path("setupSeconds").asInt()!=120
         || !capabilities.path("relayTelemetry").asBoolean()
         || !capabilities.path("oneConnection").asBoolean()
@@ -158,8 +158,8 @@ class MeshEngine implements RemoteEngine {
                 2,
                 "consent",
                 72,
-                "expire",
-                3,
+                "start", java.time.Instant.now().getEpochSecond(),
+                "end", loginExpiresAt,
                 "viewOnly",
                 viewOnly));
     String id = result.path("publicid").asText(), link = result.path("url").asText();

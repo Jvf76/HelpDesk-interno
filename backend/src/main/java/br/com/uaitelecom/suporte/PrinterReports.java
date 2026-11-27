@@ -1,5 +1,7 @@
 package br.com.uaitelecom.suporte;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.*;
 import java.time.*;
@@ -21,24 +23,55 @@ class PrinterReports {
   Map<String,Object> list(HttpServletRequest r){
     staff(r);
     var latest=db.list("SELECT batch FROM printer_job ORDER BY requested_at DESC LIMIT 1");
-    return Map.of("printers",db.list("SELECT * FROM printer ORDER BY label"),
+    return Map.of("printers",db.list("SELECT * FROM printer WHERE removed_at IS NULL ORDER BY label"),
         "collectors",db.list("SELECT id,name FROM device WHERE revoked=FALSE AND agent_hash IS NOT NULL ORDER BY name"),
         "jobs",latest.isEmpty()?List.of():jobs(latest.getFirst().get("batch")));
   }
   List<Map<String,Object>> jobs(Object batch){
-    return db.list("SELECT batch,printer_id,CASE WHEN status='WAITING' AND requested_at<? THEN 'EXPIRED' ELSE status END AS status,received_at FROM printer_job WHERE batch=? ORDER BY printer_id",OffsetDateTime.now().minusMinutes(15),batch);
+    return db.list("SELECT batch,printer_id,CASE WHEN status='WAITING' AND requested_at<? THEN 'EXPIRED' ELSE status END AS status,received_at FROM printer_job WHERE batch=? AND printer_id IN (SELECT id FROM printer WHERE removed_at IS NULL) ORDER BY printer_id",OffsetDateTime.now().minusMinutes(15),batch);
+  }
+  record PrinterInput(@NotBlank @Size(max=100) String label,@Size(max=60) String serial){}
+  void admin(HttpServletRequest r){Security.require(Security.actor(r).admin(),"Apenas administrador.");}
+  void log(String id,String action,Object before,Object after){
+    db.exec("INSERT INTO printer_change VALUES (?,?,?,?,?,?)",UUID.randomUUID(),id,action,Objects.toString(before,null),Objects.toString(after,null),OffsetDateTime.now());
+  }
+  @PostMapping("/printers") @Transactional
+  Map<String,String> create(@Valid @RequestBody PrinterInput input,HttpServletRequest r){
+    admin(r);String id=UUID.randomUUID().toString();
+    db.exec("INSERT INTO printer(id,label,serial,supported) VALUES(?,?,?,FALSE)",id,input.label().strip(),ActivationController.optional(input.serial()));
+    log(id,"PRINTER_CREATED",null,input.label().strip());return Map.of("id",id);
+  }
+  @PutMapping("/printers/{id}") @Transactional
+  void edit(@PathVariable String id,@Valid @RequestBody PrinterInput input,HttpServletRequest r){
+    admin(r);var p=db.one("SELECT * FROM printer WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
+    String label=input.label().strip(),serial=ActivationController.optional(input.serial());
+    Security.require(!Boolean.TRUE.equals(p.get("supported"))||Objects.equals(serial,p.get("serial")),"A série identifica o equipamento homologado.");
+    if(!Objects.equals(p.get("label"),label))log(id,"label",p.get("label"),label);
+    if(!Objects.equals(p.get("serial"),serial))log(id,"serial",p.get("serial"),serial);
+    db.exec("UPDATE printer SET label=?,serial=? WHERE id=?",label,serial,id);
+  }
+  @DeleteMapping("/printers/{id}") @Transactional
+  void remove(@PathVariable String id,HttpServletRequest r){
+    admin(r);var p=db.one("SELECT label,removed_at FROM printer WHERE id=? FOR UPDATE",id);
+    if(p.get("removed_at")!=null)return;
+    db.exec("UPDATE printer SET collector=NULL,removed_at=? WHERE id=?",OffsetDateTime.now(),id);
+    db.exec("UPDATE printer_job SET status='CANCELLED' WHERE printer_id=? AND status='WAITING'",id);
+    log(id,"PRINTER_REMOVED",p.get("label"),null);
   }
   record Binding(UUID collector){}
-  @PutMapping("/printers/{id}/collector")
+  @PutMapping("/printers/{id}/collector") @Transactional
   void assign(HttpServletRequest r,@PathVariable String id,@RequestBody Binding b){
     staff(r);
-    Security.require(b.collector()==null||db.exists("SELECT 1 FROM device WHERE id=? AND revoked=FALSE AND agent_hash IS NOT NULL",b.collector()),"Coletor inválido.");
-    if(db.exec("UPDATE printer SET collector=? WHERE id=? AND supported=TRUE",b.collector(),id)!=1)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+    if(b.collector()!=null)db.one("SELECT id FROM device WHERE id=? AND revoked=FALSE AND agent_hash IS NOT NULL FOR UPDATE",b.collector());
+    var p=db.one("SELECT collector FROM printer WHERE id=? AND removed_at IS NULL AND supported=TRUE FOR UPDATE",id);
+    if(Objects.equals(p.get("collector"),b.collector()))return;
+    db.exec("UPDATE printer SET collector=? WHERE id=?",b.collector(),id);
+    log(id,"collector",p.get("collector"),b.collector());
   }
   @PostMapping("/printers/batches") @Transactional
   Map<String,Object> request(HttpServletRequest r){
     staff(r);UUID batch=UUID.randomUUID();var now=OffsetDateTime.now();
-    for(var p:db.list("SELECT * FROM printer ORDER BY id FOR UPDATE")){
+    for(var p:db.list("SELECT * FROM printer WHERE removed_at IS NULL ORDER BY id FOR UPDATE")){
       var status=!Boolean.TRUE.equals(p.get("supported"))?"UNSUPPORTED":p.get("collector")==null?"UNASSIGNED":"WAITING";
       db.exec("INSERT INTO printer_job(id,batch,printer_id,collector,status,requested_at) VALUES(?,?,?,?,?,?)",UUID.randomUUID(),batch,p.get("id"),p.get("collector"),status,now);
     }

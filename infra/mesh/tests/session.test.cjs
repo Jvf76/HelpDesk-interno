@@ -65,7 +65,7 @@ test('lease expires without backend; absolute expiry cannot be renewed',t=>{
   let f=fixture();t.mock.timers.tick(12001);
   assert.equal(f.status(true).reason,'LEASE_LOST');assert.equal(f.closed(),1);
   f=fixture();f.event(30);f.event(31);engine.data(f.agent,tile);engine.data(f.viewer,JSON.stringify({type:'uai-rendered'}));
-  for(let i=0;i<5;i++){t.mock.timers.tick(10000);assert.notEqual(f.status(true).state,'ENDED');}
+  for(let i=0;i<17;i++){t.mock.timers.tick(10000);assert.notEqual(f.status(true).state,'ENDED');}
   t.mock.timers.tick(10001);assert.equal(f.status(true).reason,'EXPIRED');
 });
 test('disconnect terminates, late native local reason refines metadata',()=>{
@@ -166,16 +166,17 @@ test('loss and reconnect requires a new attempt, never reuses share',()=>{
 });
 
 test('same share cannot be registered again after termination',()=>{const f=fixture();f.status(false,true);assert.throws(()=>engine.register(f.entry));assert.equal(f.status().state,'ENDED');});
-test('delayed native consent preserves full 60 seconds; duplicate activation never restarts budget',t=>{
+test('delayed native consent preserves the login deadline; duplicate activation never restarts budget',t=>{
  t.mock.timers.enable({apis:['Date'],now:Date.now()});
  const f=fixture(true);engine.data(f.agent,JSON.stringify({ctrlChannel:'102938',type:'console',msgid:1}));
  for(let i=0;i<3;i++){t.mock.timers.tick(9000);assert.equal(f.status(true).state,'AWAITING_CONSENT');}
  assert.equal(f.status().activeUntil,null);
  f.event(30);f.event(31);engine.data(f.agent,tile);engine.data(f.viewer,JSON.stringify({type:'uai-rendered'}));
- const start=Date.now(),deadline=f.status().activeUntil;
- assert.equal(deadline,start+60000);assert.equal(f.status().state,'ACTIVE');
+ const deadline=f.status().activeUntil;
+ assert.equal(deadline,f.entry.expireTime);assert.equal(f.status().state,'ACTIVE');
  for(let i=0;i<5;i++){t.mock.timers.tick(10000);f.status(true);f.event(30);f.event(31);engine.data(f.viewer,JSON.stringify({type:'uai-rendered'}));assert.equal(f.status().activeUntil,deadline);}
- t.mock.timers.tick(9999);assert.equal(f.status(true).state,'ACTIVE');
+ while(deadline-Date.now()>10000){t.mock.timers.tick(10000);assert.equal(f.status(true).state,'ACTIVE');}
+ t.mock.timers.tick(deadline-Date.now()-1);assert.equal(f.status(true).state,'ACTIVE');
  t.mock.timers.tick(1);assert.equal(f.status().reason,'EXPIRED');
  f.event(30);f.event(31);engine.data(f.viewer,JSON.stringify({type:'uai-rendered'}));assert.equal(f.status().activeUntil,deadline);assert.equal(f.status().state,'ENDED');
 });
@@ -189,4 +190,40 @@ test('native diagnostics preserve helper identity without authorizing image or i
  assert.equal(f.status().consentAt,null); // only original native consent events authorize
  engine.agentEvent({nodeid:f.entry.nodeid,guestname:f.guest,msgid:9100,msgArgs:['secret',0,0,0,0,0]});
  assert.equal(f.status().nativeDiagnostic.stage,'RESPONSE_ACCEPTED');
+});
+
+test('one-minute domain cap allows viewer initialization within the original deadline',()=>{
+  const deadline=Date.now()+60000;
+  const id=randomUUID();
+  engine.register({publicid:id,userid:'owner',nodeid:'node',guestName:'TI • Uai '+randomUUID(),p:2,consent:72,expireTime:deadline});
+  assert.equal(engine.status('owner',id).state,'READY');
+  assert.equal(engine.viewerCookie('owner',id,'','127.0.0.1').expire,deadline);
+  assert.equal(engine.status('owner',id,false,true).state,'ENDED');
+  assert.equal(engine.viewerCookie('owner',id,'','127.0.0.1'),null);
+});
+
+test('active transport tolerates a delayed pong and closes after sustained loss',t=>{
+  t.mock.timers.enable({apis:['Date','setInterval'],now:Date.now()});
+  delete require.cache[require.resolve('../uai-session.cjs')];
+  const relay=require('../uai-session.cjs');
+  const guest='TI • Uai '+randomUUID(),id=randomUUID();
+  relay.register({publicid:id,userid:'owner',nodeid:'node',guestName:guest,p:2,consent:72,expireTime:Date.now()+180000});
+  const ws=new EventEmitter();
+  ws.ping=()=>{};ws.send=()=>{};
+  const viewer={req:{query:{p:2}},ws},agent={peer:viewer};
+  viewer.peer=agent;
+  relay.attach(viewer,{gn:guest,pid:id,nid:'node'},()=>{});
+  for(const msgid of [30,31])relay.agentEvent({nodeid:'node',guestname:guest,msgid});
+  relay.data(agent,tile);
+  relay.data(viewer,JSON.stringify({type:'uai-rendered'}));
+  const status=()=>relay.status('owner',id,true,false);
+  const deadline=status().activeUntil;
+  const advance=ms=>{t.mock.timers.tick(ms);return status();};
+  advance(500);
+  advance(7000);
+  assert.equal(advance(7000).state,'ACTIVE');
+  ws.emit('pong');
+  advance(7000);
+  assert.equal(advance(7000).activeUntil,deadline);
+  assert.equal(advance(7000).reason,'CONNECTION_LOST');
 });

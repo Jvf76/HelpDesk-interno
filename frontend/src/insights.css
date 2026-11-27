@@ -1,0 +1,62 @@
+.overview-insights {
+  --health-normal: #258665;
+  --health-attention: #bc8426;
+  --health-critical: #c73d46;
+  --health-unknown: #788697;
+  display:grid;
+  grid-template-columns:minmax(210px,.95fr) minmax(0,1.12fr) minmax(0,1fr);
+  grid-template-areas:"feed peaks peaks" "feed top health";
+  align-items:stretch;
+  gap:14px;
+}
+.overview-insights section { border:1px solid var(--dash-line); background:var(--dash-surface); border-radius:8px; min-width:0; padding:clamp(16px,1.6vw,24px); }
+.monitor .overview-insights h2 { font-size:17px; letter-spacing:-.025em; }
+.monitor .overview-insights p,.monitor .overview-insights details { font-size:12px; color:var(--dash-muted); }
+.overview-insights details { margin-top:14px; }
+.overview-insights summary { cursor:pointer; }
+.overview-insights ol,.overview-insights ul { list-style:none; padding:0; margin:12px 0 0; }
+.insight-feed { grid-area:feed; }
+.insight-peaks { grid-area:peaks; }
+.insight-top { grid-area:top; }
+.insight-health { grid-area:health; }
+.insight-feed li { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--dash-line); }
+.insight-feed li:last-child { border:0; }
+.insight-feed li svg { margin-top:2px; color:var(--dash-muted); flex:none; }
+.insight-feed li span,.insight-feed time { display:block; overflow-wrap:anywhere; }
+.insight-feed time { color:var(--dash-muted); font-size:11px; }
+.peaks-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .peak-period { display:flex; align-items:flex-start; gap:3px; }
+.monitor .peak-period button { min-height:34px; padding:4px 9px; background:transparent; border:1px solid transparent; color:var(--dash-muted); }
+.monitor .peak-period button[aria-pressed=true] { background:var(--dash-soft); color:var(--dash-text); border-color:var(--dash-line); }
+.peak-plot { display:grid; grid-template-columns:32px minmax(0,1fr); gap:5px; }
+.peak-axis { display:flex; flex-direction:column; justify-content:space-between; text-align:right; height:142px; color:var(--dash-muted); font-size:10px; }
+.monitor .feed-toggle { margin-top:12px; color:var(--dash-text); border-color:var(--dash-line); background:transparent; }
+.insight-feed ol li div { min-width:0; }
+.insight-feed li svg { flex:none; box-sizing:content-box; padding:5px; background:var(--dash-soft); border-radius:50%; }
+
+.peaks-key { display:flex; gap:16px; margin:14px 0 8px; font-size:12px; }
+.peaks-key span::before { content:""; display:inline-block; width:10px; height:10px; margin-right:5px; background:var(--dash-cpu); }
+.peaks-key span+span::before { background:var(--dash-memory); }
+.peaks-scroll { overflow-x:auto; }
+.peaks-bars { display:flex; gap:8px; padding-top:2px; }
+.peak-day { flex:1 0 34px; text-align:center; font-size:10px; color:var(--dash-muted); }
+.peak-day div { height:142px; display:flex; align-items:flex-end; justify-content:center; gap:3px; border-block:1px solid var(--dash-line); }
+.peak-day i { width:24%; max-width:18px; background:var(--dash-cpu); }
+.peak-day i+i { background:var(--dash-memory); }
+.insight-top li+li { border-top:1px solid var(--dash-line); }
+.monitor .insight-top button { justify-content:space-between; background:transparent; border:0; width:100%; color:var(--dash-text); gap:12px; padding:8px 0; white-space:normal; text-align:left; }
+.monitor .insight-top button:hover { color:var(--dash-focus); }
+.health-summary { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:16px; }
+.health-wheel { position:relative; width:clamp(80px,7vw,116px); }
+.health-wheel svg { display:block; width:100%; }
+.health-wheel b { position:absolute; inset:0; display:grid; place-items:center; font-size:20px; }
+.health-summary ul { flex:1; min-width:100px; margin:0; }
+.health-summary li { display:flex; align-items:center; gap:7px; font-size:12px; margin-block:4px; }
+.health-summary li i { width:8px; height:8px; border-radius:50%; }
+.health-summary li b { margin-left:auto; }
+@media(max-width:960px) {
+  .overview-insights { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-areas:"peaks peaks" "feed top" "feed health"; }
+}
+@media(max-width:700px) {
+  .overview-insights { grid-template-columns:minmax(0,1fr); grid-template-areas:"peaks" "feed" "top" "health"; }
+}

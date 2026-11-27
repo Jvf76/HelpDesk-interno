@@ -16,7 +16,7 @@ interface RemoteEngine {
 
   boolean enabled();
 
-  Share create(String node, String guest, boolean viewOnly);
+  Share create(String node, String guest, boolean viewOnly, long loginExpiresAt);
 
   Observation remove(String node, String shareId);
 }

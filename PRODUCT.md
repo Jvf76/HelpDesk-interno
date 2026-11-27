@@ -50,6 +50,8 @@ O sucesso depende de permitir suporte com consentimento explícito, mostrar o es
 
 ### Sessão ativa e encerramento
 
+- O atendimento ativo pode continuar enquanto o login que o iniciou estiver válido, houver comunicação e o consentimento permanecer vigente. O atendimento não possui um limite próprio de duração.
+
 - O computador acessado deve mostrar uma indicação visual clara da sessão ativa, incluindo contorno azul e barra de encerramento.
 - O colaborador deve conseguir encerrar o acesso imediatamente.
 - Encerramento local interrompe imagem, teclado, mouse, área de transferência e transferência de arquivos.

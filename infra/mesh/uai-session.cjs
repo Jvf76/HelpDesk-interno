@@ -4,6 +4,7 @@
 // No image/input contents are retained. No cryptographic or desktop protocol replacement.
 const sessions = new Map();
 const LEASE_MS = 12000;
+const ACTIVE_PONG_TIMEOUT_MS = 20000;
 const RETAIN_MS = 15 * 60 * 1000;
 const marker = / • Uai [0-9a-f-]{36}$/i;
 const now = () => Date.now();
@@ -14,7 +15,7 @@ function transition(s,next){
  if(!allowed[s.state]?.includes(next))return false;
  const previous=s.state,at=now();s.state=next;
  console.info('UAI_RELAY_TRANSITION '+JSON.stringify({session:s.guest.slice(-36),previous,next,component:'MESH_RELAY',at,elapsedMs:at-s.phaseAt,mode:s.viewOnly?'VIEW':'CONTROL'}));
- if(next==='ACTIVE'&&!s.activatedAt){s.activatedAt=at;s.activeUntil=at+60000;s.expiresAt=s.activeUntil;try{s.relay.ws.send(JSON.stringify({ctrlChannel:'102938',type:'metadata',uaiActiveUntil:s.activeUntil}));}catch{finish(s,'CONNECTION_LOST');return false;}}
+ if(next==='ACTIVE'&&!s.activatedAt){s.activatedAt=at;s.activeUntil=s.authorizationUntil;s.expiresAt=s.activeUntil;try{s.relay.ws.send(JSON.stringify({ctrlChannel:'102938',type:'metadata',uaiActiveUntil:s.activeUntil}));}catch{finish(s,'CONNECTION_LOST');return false;}}
  s.phaseAt=at;s.phaseDeadline=PHASE_MS[next]?at+PHASE_MS[next]:null;return true;
 }
 function nativeAccepted(s){if(!s.consentAt)s.consentAt=now();if(['CONNECTING','AWAITING_CONSENT'].includes(s.state))transition(s,'CONSENTED');}
@@ -47,10 +48,10 @@ function alive(s) {
 }
 function register(entry) {
   if (!marker.test(entry.guestName || '')) return;
-  if (entry.p !== 2 || entry.consent !== 72 || !Number.isFinite(entry.expireTime) || entry.expireTime > now() + 181000) throw Error('Invalid Uai share policy');
+  if (entry.p !== 2 || entry.consent !== 72 || !Number.isFinite(entry.expireTime) || entry.expireTime > now() + 8*60*60*1000) throw Error('Invalid Uai share policy');
   if(sessions.has(entry.publicid))throw Error('Attempt already registered');
   sessions.set(entry.publicid, {id:entry.publicid, owner:entry.userid, node:entry.nodeid,
-    guest:entry.guestName, viewOnly:entry.viewOnly === true, expiresAt:Math.min(entry.expireTime-60000,now()+120000),authorizationUntil:entry.expireTime,activeUntil:null,nativeDiagnostic:{},
+    guest:entry.guestName, viewOnly:entry.viewOnly === true, expiresAt:Math.min(entry.expireTime,now()+120000),authorizationUntil:entry.expireTime,activeUntil:null,nativeDiagnostic:{},
     leaseUntil:now()+LEASE_MS,phaseAt:now(),phaseDeadline:now()+PHASE_MS.READY,tileAt:null,renderedAt:null, state:'READY', reason:null, startedAt:null, endedAt:null,
     consentAt:null, privacy:false, relay:null, closers:new Set(), viewerMessages:0,agentMessages:0,protocolRequested:false,nativeConsentRequested:false});
 }
@@ -187,13 +188,14 @@ function probe(s) {
       ws.on('pong',()=>{endpoint.uaiHealth.pong=now();});
     }
     const health=endpoint.uaiHealth;
-    if(now()-health.pong>10000){finish(s,'CONNECTION_LOST');return;}
+    const pongTimeout=s.state==='ACTIVE'?ACTIVE_PONG_TIMEOUT_MS:10000;
+    if(now()-health.pong>pongTimeout){finish(s,'CONNECTION_LOST');return;}
     if(now()-health.ping>3000){health.ping=now();try{ws.ping();}catch{finish(s,'CONNECTION_LOST');}}
   }
 }
 const timer=setInterval(()=>{for(const [id,s] of sessions){if(alive(s))probe(s);if(s.endedAt&&now()-s.endedAt>RETAIN_MS)sessions.delete(id);}},500);timer.unref();
 module.exports={register,status,attach,data,disconnected,agentEvent,TileObserver,
-  capabilities:()=>({version:3,renderAck:true,activeSeconds:60,setupSeconds:120,leaseSeconds:LEASE_MS/1000,oneConnection:true,relayTelemetry:true})};
+  capabilities:()=>({version:4,renderAck:true,loginBoundLifetime:true,setupSeconds:120,leaseSeconds:LEASE_MS/1000,oneConnection:true,relayTelemetry:true})};
 // Desktop bootstrap uses the same guest-cookie fields as MeshCentral sharing.
 // Only the owner of a live, not-yet-connected Uai share can obtain it.
 module.exports.viewerCookie = function(owner,id,domain,ip) {

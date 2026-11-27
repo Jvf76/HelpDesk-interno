@@ -12,9 +12,9 @@
 
 Aplicar a linguagem visual aprovada na Visão geral às abas Computadores, Monitoramento e Histórico de acessos, incluindo detalhes do equipamento. Reutilizar contratos existentes; histórico inicialmente por computador, com limites explícitos. Preservar visualizador remoto, consentimento Windows, backend, banco, motor remoto e regras de autenticação.
 
-Menu inicial: Visão geral, Computadores, Monitoramento e Histórico de acessos. Não apresentar como funcionais destinos ainda não implementados. Auditoria não terá item separado; sua visualização futura pertencerá ao histórico. Não criar Configurações sem funções reais aprovadas.
+O menu oferece Visão geral, Computadores, Impressoras, Monitoramento e Histórico de acessos. A conta administradora também vê Usuários. Não apresentar como funcionais destinos ainda não implementados. O Histórico de acessos reúne os eventos de sessão. A auditoria cadastral fica em cada computador ou impressora e pode ser consultada após a remoção. Não criar Configurações sem funções reais aprovadas.
 
-Dashboard sem pesquisa e sem “Localizar computador”; pesquisa por nome/código fica em Computadores. Identificação “Equipe de TI”. Contabilizar sessões separadamente da disponibilidade; tabelas do dashboard usam Online/Offline com texto e ícone e acesso aos detalhes pela linha, com alternativa de teclado. Preservar temas, recursos, alertas de armazenamento e estados reais de dados.
+A Visão geral contém apenas os indicadores de cadastro, disponibilidade, sessões e alertas, as atividades recentes, os picos diários de CPU e RAM, o ranking de memória e a distribuição de saúde. O inventário e a pesquisa por nome ou código ficam em Computadores. O monitoramento detalhado fica em Monitoramento. A identificação da conta é “Equipe de TI”.
 
 ## Segurança do trabalho
 

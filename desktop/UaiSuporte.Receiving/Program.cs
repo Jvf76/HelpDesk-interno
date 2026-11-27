@@ -79,10 +79,17 @@ public sealed class ReceiverWindow:Form {
 }
 sealed class ConsentDialog:Form {
  public string Decision{get;private set;}="reject";
- public ConsentDialog(Request r){Text="Uai Telecom • consentimento local";Size=new(550,280);StartPosition=FormStartPosition.CenterParent;TopMost=true;ControlBox=true;
- var panel=new FlowLayoutPanel{Dock=DockStyle.Fill,Padding=new(20),FlowDirection=FlowDirection.TopDown};
- panel.Controls.Add(new Label{Text=$"{r.Technician} solicita {(r.Mode=="VIEW"?"visualizar sua tela":"visualização e controle")}.\nOrigem: painel web autenticado.\nLaboratório: 60 segundos a partir da imagem ativa.\nApós esta escolha, confirme também a janela de autorização do motor. Sem essa confirmação nenhuma imagem será transmitida.",AutoSize=true,MaximumSize=new(480,0)});
- void Add(string text,string value){var button=new Button{Text=text,AutoSize=true};button.Click+=(_,_)=>{Decision=value;Close();};panel.Controls.Add(button);}
- Add("Recusar","reject");Add("Permitir somente visualização","accept-view");if(r.Mode=="CONTROL")Add("Permitir visualização e controle","accept");Controls.Add(panel);
+ public ConsentDialog(Request r){
+  Text="Uai Suporte • Solicitação de acesso";
+  ClientSize=new(530,270);StartPosition=FormStartPosition.CenterParent;TopMost=true;
+  var panel=new FlowLayoutPanel{Dock=DockStyle.Fill,Padding=new(20),FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoScroll=true};
+  bool control=r.Mode=="CONTROL";
+  string permissions=control
+   ?"Ao aceitar, você autoriza a equipe a visualizar sua tela, controlar o teclado e o mouse, usar a área de transferência e transferir arquivos durante este atendimento."
+   :"Ao aceitar, você autoriza a equipe a visualizar sua tela durante este atendimento.";
+  panel.Controls.Add(new Label{Text=$"{r.Technician} solicita acesso pelo painel Uai Suporte.\n\n{permissions}\n\nConfirme também a janela de autorização do motor. Você pode fechar esta solicitação para recusar ou encerrar o acesso pela barra de sessão.",AutoSize=true,MaximumSize=new(470,0)});
+  var accept=new Button{Text="Aceitar",AutoSize=true,Margin=new(3,12,3,3),Enabled=control||r.Mode=="VIEW"};
+  accept.Click+=(_,_)=>{Decision=control?"accept":"accept-view";Close();};
+  panel.Controls.Add(accept);Controls.Add(panel);
  }
 }

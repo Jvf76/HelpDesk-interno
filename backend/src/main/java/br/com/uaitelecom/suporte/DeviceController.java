@@ -60,7 +60,7 @@ class DeviceController {
       @RequestParam(defaultValue = "") String q,
       @RequestParam(defaultValue = "") String location) {
     var a = Security.actor(r);
-    return db.list("SELECT d.*,u.name AS owner_name FROM device d LEFT JOIN app_user u ON u.id=d.owner_id ORDER BY d.name").stream()
+    return db.list("SELECT d.*,u.name AS owner_name FROM device d LEFT JOIN app_user u ON u.id=d.owner_id WHERE d.removed_at IS NULL ORDER BY d.name").stream()
         .filter(d -> access.device(a, Db.id(d, "id"), false) || a.id().equals(Db.id(d, "owner_id")))
         .map(DeviceController::publicDevice)
         .filter(
@@ -83,6 +83,7 @@ class DeviceController {
   }
 
   @PostMapping("/devices")
+  @org.springframework.transaction.annotation.Transactional
   Map<String, Object> create(@Valid @RequestBody DeviceInput d, HttpServletRequest r) {
     var a = Security.actor(r);
     Security.require(a.admin(), "Apenas administrador.");
@@ -113,7 +114,7 @@ class DeviceController {
     Security.require(
         !db.exists("SELECT 1 FROM remote_session WHERE device_id=? AND ended_at IS NULL", id),
         "Encerre as sessões antes de editar o dispositivo.");
-    var existing=db.one("SELECT * FROM device WHERE id=?",id);
+    var existing=db.one("SELECT * FROM device WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
     Security.require(d.meshNode()==null||Objects.equals(d.meshNode(),existing.get("mesh_node")),"Não altere a identidade do motor por formulário; use recuperação.");
     java.util.function.BiConsumer<String,Object> change=(field,value)->{Object old=existing.get(field);if(!Objects.equals(old,value))db.exec("INSERT INTO device_change VALUES (?,?,?,?,?,?,?,?)",UUID.randomUUID(),id,a.id(),field,old==null?null:old.toString(),value==null?null:value.toString(),"Edição pela API de dispositivos",OffsetDateTime.now());};
     change.accept("friendly_name",d.name());change.accept("city",d.location());change.accept("department",d.department());change.accept("owner_id",d.ownerId());
@@ -145,9 +146,11 @@ class DeviceController {
   }
 
   @PostMapping("/devices/{id}/revoke")
+  @org.springframework.transaction.annotation.Transactional
   void revoke(@PathVariable UUID id, HttpServletRequest r) {
     var a = Security.actor(r);
     Security.require(a.admin(), "Apenas administrador.");
+    db.one("SELECT id FROM device WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
     db.exec("UPDATE device SET revoked=TRUE,agent_hash=NULL,enrollment_hash=NULL,enrollment_receipt_hash=NULL,enrollment_receipt_expires=NULL WHERE id=?", id);
     sessions.sweep();
     db.audit(a.id().toString(), "DEVICE_REVOKED", id);
@@ -155,11 +158,12 @@ class DeviceController {
 
   // Explicit administrative recovery preserves the public code while invalidating the old installation.
   @PostMapping("/devices/{id}/recovery")
+  @org.springframework.transaction.annotation.Transactional
   synchronized Map<String,Object> recovery(@PathVariable UUID id, HttpServletRequest r) {
     var a=Security.actor(r); Security.require(a.admin(),"Apenas administrador.");
-    db.one("SELECT id FROM device WHERE id=?",id);
+    db.one("SELECT id FROM device WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
     String code=Security.token();
-    db.exec("UPDATE device SET agent_hash=NULL,last_seen=NULL,mesh_node=NULL,mesh_bound_at=NULL,revoked=FALSE,enrollment_hash=?,enrollment_expires=?,enrollment_receipt_hash=NULL,enrollment_receipt_expires=NULL WHERE id=?",Security.hash(code),OffsetDateTime.now().plusMinutes(10),id);
+    db.exec("UPDATE device SET agent_hash=NULL,last_seen=NULL,mesh_node=NULL,mesh_bound_at=NULL,revoked=FALSE,enrollment_hash=?,enrollment_expires=?,enrollment_receipt_hash=NULL,enrollment_receipt_expires=NULL WHERE id=? AND removed_at IS NULL",Security.hash(code),OffsetDateTime.now().plusMinutes(10),id);
     sessions.sweep();
     db.audit(a.id().toString(),"DEVICE_RECOVERY_ISSUED",id);
     return Map.of("deviceId",id,"code",code,"expiresIn",600);
@@ -175,9 +179,11 @@ class DeviceController {
   }
 
   @PutMapping("/devices/{id}/permissions")
+  @org.springframework.transaction.annotation.Transactional
   synchronized void permit(@PathVariable UUID id, @RequestBody Permission p, HttpServletRequest r) {
     var a = Security.actor(r);
     Security.require(a.admin(), "Apenas administrador.");
+    db.one("SELECT id FROM device WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
     Security.require(
         p.userId() != null
             && db.exists(
@@ -190,9 +196,11 @@ class DeviceController {
   }
 
   @DeleteMapping("/devices/{id}/permissions/{userId}")
+  @org.springframework.transaction.annotation.Transactional
   void unpermit(@PathVariable UUID id, @PathVariable UUID userId, HttpServletRequest r) {
     var a = Security.actor(r);
     Security.require(a.admin(), "Apenas administrador.");
+    db.one("SELECT id FROM device WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
     db.exec("DELETE FROM device_permission WHERE device_id=? AND user_id=?", id, userId);
     sessions.sweep();
     db.audit(a.id().toString(), "PERMISSION_REVOKED", id);

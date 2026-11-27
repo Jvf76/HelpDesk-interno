@@ -15,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 class ActivationController {
   final Db db; final SessionService sessions;
   ActivationController(Db db, SessionService sessions) { this.db=db; this.sessions=sessions; }
-  record Issue(@Min(30) @Max(3600) int lifetimeSeconds, UUID recoverDeviceId) {}
+  record Issue(@Min(30) @Max(3600) int lifetimeSeconds, UUID recoverDeviceId,
+      @Size(max=120) String responsible, @Size(max=120) String storeName) {}
+  static String optional(String text) { return text==null || text.isBlank()?null:text.strip(); }
   // Secret fields deliberately have redacted toString implementations.
   record Activate(@NotBlank @Pattern(regexp="[A-Za-z0-9_-]{43}") String token,
       @NotNull UUID installationId,
@@ -26,9 +28,9 @@ class ActivationController {
   @PostMapping("/activation-tokens")
   Map<String,Object> issue(@Valid @RequestBody Issue input,HttpServletRequest r) {
     var a=Security.actor(r); Security.require(a.admin(),"Apenas administrador.");
-    if(input.recoverDeviceId()!=null) Security.require(db.exists("SELECT 1 FROM device WHERE id=? AND revoked=TRUE AND organization='UAI_TELECOM'",input.recoverDeviceId()),"Recuperação exige cadastro revogado.");
+    if(input.recoverDeviceId()!=null) Security.require(db.exists("SELECT 1 FROM device WHERE id=? AND removed_at IS NULL AND revoked=TRUE AND organization='UAI_TELECOM'",input.recoverDeviceId()),"Recuperação exige cadastro revogado.");
     String token=Security.token();UUID id=UUID.randomUUID();
-    db.exec("INSERT INTO activation_token(id,token_hash,organization,issued_by,expires_at,state,target_id) VALUES (?,?,'UAI_TELECOM',?,?,'ISSUED',?)",id,Security.hash(token),a.id(),OffsetDateTime.now().plusSeconds(input.lifetimeSeconds()),input.recoverDeviceId());
+    db.exec("INSERT INTO activation_token(id,token_hash,organization,issued_by,expires_at,state,target_id,responsible,store_name) VALUES (?,?,'UAI_TELECOM',?,?,'ISSUED',?,?,?)",id,Security.hash(token),a.id(),OffsetDateTime.now().plusSeconds(input.lifetimeSeconds()),input.recoverDeviceId(),optional(input.responsible()),optional(input.storeName()));
     db.audit(a.id().toString(),"ACTIVATION_ISSUED",id);
     return Map.of("id",id,"token",token,"expiresIn",input.lifetimeSeconds());
   }
@@ -62,12 +64,21 @@ class ActivationController {
     Security.require(!db.exists("SELECT 1 FROM device WHERE registration_id=? OR registration_hash=? OR agent_hash=?",input.installationId(),hash,hash),"Identidade existente. Recupere o cadastro original.");
     UUID id=Db.id(t,"target_id");
     Security.require(Objects.equals(id,input.recoverDeviceId()),"Use o token autorizado para este cadastro.");
+    Map<String,Object> previous=id==null?Map.of():db.one("SELECT responsible,store_name FROM device WHERE id=? AND removed_at IS NULL FOR UPDATE",id);
     if(id==null) {
       id=UUID.randomUUID();String code;
       do {code=Security.token().replace("-","").replace("_","").substring(0,12).toUpperCase(Locale.ROOT);} while(db.exists("SELECT 1 FROM device WHERE public_code=?",code));
       db.exec("INSERT INTO device(id,name,os,location,department,registration_id,registration_hash,agent_hash,public_code) VALUES (?,?,?,'Não informado','Não informado',?,?,?,?)",id,input.name(),input.os(),input.installationId(),hash,hash,code);
     } else {
-      Security.require(db.exec("UPDATE device SET revoked=FALSE,name=?,os=?,registration_id=?,registration_hash=?,agent_hash=?,last_seen=NULL,mesh_node=NULL,mesh_bound_at=NULL WHERE id=? AND revoked=TRUE",input.name(),input.os(),input.installationId(),hash,hash,id)==1,"Recuperação já utilizada.");
+      Security.require(db.exec("UPDATE device SET revoked=FALSE,name=?,os=?,registration_id=?,registration_hash=?,agent_hash=?,last_seen=NULL,mesh_node=NULL,mesh_bound_at=NULL WHERE id=? AND removed_at IS NULL AND revoked=TRUE",input.name(),input.os(),input.installationId(),hash,hash,id)==1,"Recuperação já utilizada.");
+    }
+    if(t.get("responsible")!=null || t.get("store_name")!=null)
+      db.exec("UPDATE device SET responsible=COALESCE(?,responsible),store_name=COALESCE(?,store_name) WHERE id=?",
+          t.get("responsible"),t.get("store_name"),id);
+    for(String field:List.of("responsible","store_name")){
+      Object value=t.get(field);
+      if(value!=null&&!Objects.equals(previous.get(field),value))
+        db.exec("INSERT INTO device_change VALUES (?,?,?,?,?,?,?,?)",UUID.randomUUID(),id,t.get("issued_by"),field,previous.get(field),value,"Ativação administrativa",OffsetDateTime.now());
     }
     db.exec("UPDATE activation_token SET state='USED',installation_id=?,credential_hash=?,device_id=? WHERE id=?",input.installationId(),hash,id,t.get("id"));
     db.audit(id.toString(),"ACTIVATION_USED",t.get("id"));

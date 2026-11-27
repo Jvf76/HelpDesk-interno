@@ -112,24 +112,27 @@ class SessionService {
           "Prova remota ainda não configurada; nenhum acesso foi iniciado.");
     Security.require(d.get("mesh_node") != null, "Vincule o Node ID do MeshCentral no cadastro.");
     sweep();
-    Security.require(
-        !db.exists("SELECT 1 FROM remote_session WHERE device_id=? AND ended_at IS NULL", device),
-        "Já existe uma solicitação para este computador.");
     UUID id = UUID.randomUUID();
-    db.exec(
-        "INSERT INTO remote_session"
-            + " (id,device_id,technician_id,user_token_hash,mode,status,requested_at,expires_at,consent_only,requester_device_id,requester_name,requester_code)"
-            + " VALUES (?,?,?,?,?,'PENDING',?,?,?,?,?,?)",
-        id,
-        device,
-        a.device()?null:a.id(),
-        a.tokenHash(),
-        mode,
-        OffsetDateTime.now(),
-        OffsetDateTime.now().plusSeconds(60), consentOnly, a.device()?a.id():null,a.name(),a.device()?db.one("SELECT public_code FROM device WHERE id=?",a.id()).get("public_code"):null);
-    db.exec("UPDATE remote_session SET requested_mode=?,phase_at=?,phase_deadline=? WHERE id=?",mode,OffsetDateTime.now(),OffsetDateTime.now().plusSeconds(60),id);
-    db.exec("INSERT INTO remote_transition VALUES (?,?,NULL,'REQUESTED','BACKEND',?,0,NULL,?)",UUID.randomUUID(),id,OffsetDateTime.now(),SessionLifecycle.message("REQUESTED"));
-    db.audit(a.id().toString(), "SESSION_REQUESTED", id);
+    lifecycleTransaction.executeWithoutResult(tx->{
+      db.one("SELECT id FROM device WHERE id=? AND removed_at IS NULL AND revoked=FALSE FOR UPDATE",device);
+      Security.require(
+          !db.exists("SELECT 1 FROM remote_session WHERE device_id=? AND ended_at IS NULL", device),
+          "Já existe uma solicitação para este computador.");
+      db.exec(
+          "INSERT INTO remote_session"
+              + " (id,device_id,technician_id,user_token_hash,mode,status,requested_at,expires_at,consent_only,requester_device_id,requester_name,requester_code)"
+              + " VALUES (?,?,?,?,?,'PENDING',?,?,?,?,?,?)",
+          id,
+          device,
+          a.device()?null:a.id(),
+          a.tokenHash(),
+          mode,
+          OffsetDateTime.now(),
+          OffsetDateTime.now().plusSeconds(60), consentOnly, a.device()?a.id():null,a.name(),a.device()?db.one("SELECT public_code FROM device WHERE id=?",a.id()).get("public_code"):null);
+      db.exec("UPDATE remote_session SET requested_mode=?,phase_at=?,phase_deadline=? WHERE id=?",mode,OffsetDateTime.now(),OffsetDateTime.now().plusSeconds(60),id);
+      db.exec("INSERT INTO remote_transition VALUES (?,?,NULL,'REQUESTED','BACKEND',?,0,NULL,?)",UUID.randomUUID(),id,OffsetDateTime.now(),SessionLifecycle.message("REQUESTED"));
+      db.audit(a.id().toString(), "SESSION_REQUESTED", id);
+    });
     return get(a, id);
   }
 
@@ -182,7 +185,7 @@ class SessionService {
           engine.create(
               d.get("mesh_node").toString(),
               a.name().substring(0, Math.min(a.name().length(), 60)) + " • Uai " + id,
-              s.get("mode").equals("VIEW"));
+              s.get("mode").equals("VIEW"), loginExpiry(s).getEpochSecond());
       db.exec("UPDATE remote_session SET status='READY',share_id=? WHERE id=?", share.id(), id);
       var issued = db.one("SELECT * FROM remote_session WHERE id=?", id);
       if (!valid(issued)) {
@@ -207,6 +210,11 @@ class SessionService {
       Security.require(valid(session),"Sessão revogada ou expirada.");
       return engine.viewer(session.get("share_id").toString(),clientIp);
     } catch(RuntimeException e) { close(session,"VIEWER_BOOTSTRAP_FAILED"); throw e; }
+  }
+
+  private Instant loginExpiry(Map<String,Object> session) {
+    return Db.instant(db.one("SELECT expires_at FROM user_session WHERE token_hash=? AND user_id=?",
+        session.get("user_token_hash"), session.get("technician_id")).get("expires_at"));
   }
 
   boolean valid(Map<String, Object> s) {
@@ -289,7 +297,7 @@ class SessionService {
       }
       // The relay is authoritative for activation time. Never restart an existing timer.
       if("ACTIVE".equals(state)&&s.get("active_until")==null&&observation.startedAt()!=null&&observation.consentAt()!=null) {
-        var activeUntil=timestamp(observation.startedAt()).plusSeconds(60);
+        var activeUntil=loginExpiry(s).atOffset(java.time.ZoneOffset.UTC);
         db.exec("UPDATE remote_session SET active_until=?,expires_at=? WHERE id=? AND active_until IS NULL",activeUntil,activeUntil,s.get("id"));
       }
 

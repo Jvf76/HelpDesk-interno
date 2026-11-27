@@ -10,12 +10,13 @@ try{for(const role of ['ADMIN','LEITURA']){
   calls.push(url.pathname+url.search);let body={};const method=route.request().method();
   if(url.pathname==='/api/auth/me')body={id:'me',name:'Usuário TESTE',role,csrf:'test-csrf'};
   else if(url.pathname==='/api/inventory')body={items:[{...device,responsible}],total:26,page:Number(url.searchParams.get('page')),size:25};
+  else if(url.pathname==='/api/monitoring/insights')body={daily:[],health:[],activity:[],top:[]};
   else if(url.pathname==='/api/monitoring/summary')body={counts:[{state:'ONLINE',count:1},{state:'OFFLINE',count:25}],totals:{total:26,alerts:0,silent:0},versions:[{version:'teste',count:26}]};
   else if(url.pathname==='/api/inventory/'+device.id&&method==='PUT'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');responsible=route.request().postDataJSON().responsible;}
   else if(url.pathname==='/api/inventory/'+device.id)body={device:{...device,responsible,windows_user:'WINDOWS/user'},latest:[],changes:[],connections:[],events:[],canConnect:role==='ADMIN'};
   else if(url.pathname==='/api/inventory/'+device.id+'/metrics')body={points:[{observed_at:new Date().toISOString(),cpu_pct:30,memory_pct:40,disk_free_pct:50}],resolution:'sample',truncated:false};
   else if(url.pathname==='/api/monitoring/series')body={points:Array.from({length:6},(_,i)=>({observed_at:new Date(Date.parse(url.searchParams.get("from"))+(Date.parse(url.searchParams.get("to"))-Date.parse(url.searchParams.get("from")))*i/5).toISOString(),online:1+i,offline:25-i,cpu_pct:20+i*4,memory_pct:45+i*2})),resolution:'sample',truncated:false};
-  else if(url.pathname==='/api/activation-tokens'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');assert.equal(route.request().postDataJSON().recoverDeviceId,device.id);body={id:'test-token',token:'TEST-FIXTURE-NOT-A-REAL-TOKEN'};}
+  else if(url.pathname==='/api/activation-tokens'){assert.equal(role,'ADMIN');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');assert.equal(route.request().postDataJSON().recoverDeviceId,device.id);assert.equal(route.request().postDataJSON().responsible,"Ana Silva");assert.equal(route.request().postDataJSON().storeName,"Loja Centro");body={id:'test-token',token:'TEST-FIXTURE-NOT-A-REAL-TOKEN'};}
 
   else if(url.pathname==='/api/connections'&&method==='POST'){assert.equal(role,'ADMIN');assert.deepEqual(route.request().postDataJSON(),{code:device.public_code,mode:'CONTROL'});body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:'PENDING',mode:'CONTROL'};}
   else if(url.pathname==='/api/sessions/e27d74a7-cf0d-4c8f-b42a-dc13779242c4/stop')body={id:'e27d74a7-cf0d-4c8f-b42a-dc13779242c4',status:'ENDED',ended_at:new Date().toISOString()};
@@ -25,16 +26,16 @@ try{for(const role of ['ADMIN','LEITURA']){
   else throw new Error('Unexpected endpoint '+url.pathname);
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
  });
- await page.goto('https://support.test/');await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
- assert(calls.some(x=>x.startsWith('/api/inventory?page=0&size=5')));assert(!calls.some(x=>x==='/api/devices'));checks+=2;
+ await page.goto('https://support.test/');await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();
+ assert(!calls.some(x=>x.startsWith('/api/inventory')));assert(!calls.some(x=>x==='/api/devices'));checks+=2;
  assert.equal(await page.getByRole('img',{name:'Uai Telecom'}).count(),1);
- await page.getByRole('img',{name:/Uso médio de CPU e memória/}).waitFor();
+ await page.getByRole('heading',{name:'Picos diários de CPU e RAM'}).waitFor();
  assert.equal(await page.locator('.dash-monitor-grid').count(),1);
- assert(calls.some(x=>x.startsWith('/api/monitoring/series')));checks+=2;
+ assert(calls.some(x=>x.startsWith('/api/monitoring/insights')));checks+=2;
  if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/light.png',fullPage:true});}
  await page.getByRole('button',{name:'Ativar tema escuro'}).click();
  assert.equal(await page.locator('.monitor').getAttribute('data-theme'),'dark');
- await page.reload();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
+ await page.reload();await page.getByRole('heading',{name:'Visão geral'}).waitFor();
  assert.equal(await page.locator('.monitor').getAttribute('data-theme'),'dark');checks+=2;
 
  if(role==='ADMIN'){await fs.mkdir('../.tools/ui-redesign',{recursive:true});process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/desktop.png',fullPage:true});}
@@ -91,6 +92,18 @@ try{for(const role of ['ADMIN','LEITURA']){
  await card.getByRole('button',{name:'Encerrar acesso',exact:true}).click();releaseLaunch();
  await page.waitForTimeout(200);assert.equal(await page.getByTitle('Atendimento remoto').count(),0);
  await card.getByRole('button',{name:'Fechar atendimento'}).click();checks+=3;
+ const actionButtons=page.locator('.equipment-audit-actions button');
+ assert.deepEqual(await actionButtons.allTextContents(),['Gerar nova ativação','Auditoria do equipamento','Remover computador']);
+ for(const width of [1200,390]){
+  await page.setViewportSize({width,height:832});
+  const boxes=await actionButtons.evaluateAll(buttons=>buttons.map(button=>button.getBoundingClientRect().toJSON()));
+  for(let i=1;i<boxes.length;i++){
+   const prev=boxes[i-1],next=boxes[i];
+   if(width===1200)assert.equal(prev.top,next.top);
+   assert(next.left>=prev.right+11 || next.top>=prev.bottom+11);
+  }
+ }
+ await page.setViewportSize({width:1200,height:832});checks+=3;
  await page.getByLabel('Colaborador responsável' ,{exact:true}).fill('Outra pessoa TESTE');await page.getByRole('button',{name:'Salvar dados administrativos',exact:true}).click();await page.getByRole('status').filter({hasText:'Código público preservado'}).waitFor();assert.equal(responsible,'Outra pessoa TESTE');checks++;}
  else{assert.equal(await page.getByRole('button',{name:'Salvar dados administrativos',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Revogar dispositivo',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Conectar',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Usuários',exact:true}).count(),0);checks+=4;}
  await page.getByRole('button',{name:'Visão geral',exact:true}).click();
@@ -107,11 +120,13 @@ try{for(const role of ['ADMIN','LEITURA']){
  if(role==='ADMIN')process.env.UAI_CAPTURE_UI === "1" && await page.screenshot({path:'../.tools/ui-redesign/mobile.png',fullPage:true});
  if(role==='ADMIN'){
   device.revoked=true;device.online=false;device.state='DISABLED';
-  await page.reload();await page.getByRole('button',{name:device.friendly_name,exact:true}).waitFor();
+  await page.reload();await page.getByRole('heading',{name:'Visão geral'}).waitFor();
   await page.getByRole('button',{name:'Computadores',exact:true}).click();
   await page.getByRole('button',{name:'Ações de '+device.name,exact:true}).click();
   await page.getByRole('button',{name:'Gerar ativação',exact:true}).click();
   assert.equal(await page.getByLabel('Destino da ativação').inputValue(),device.id);
+  await page.getByLabel('Nome do colaborador').fill('Ana Silva');
+  await page.getByLabel('Loja',{exact:true}).fill('Loja Centro');
   page.once('dialog',d=>d.accept());
   await page.getByRole('button',{name:'Gerar token de ativação',exact:true}).click();
   await page.getByLabel('Token de ativação — copie e entregue com segurança').waitFor();

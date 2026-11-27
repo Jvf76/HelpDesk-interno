@@ -24,7 +24,7 @@ class MeshContractTest {
     com.fasterxml.jackson.databind.JsonNode command(Map<String, Object> data) {
       if ("uaiSessionCapabilities".equals(data.get("action")))
         return json.createObjectNode()
-            .put("version", 3).put("renderAck",true).put("activeSeconds",60).put("setupSeconds",120)
+            .put("version", 4).put("renderAck",true).put("loginBoundLifetime",true).put("setupSeconds",120)
             .put("relayTelemetry", true)
             .put("oneConnection", true)
             .put("leaseSeconds", 12);
@@ -47,10 +47,10 @@ class MeshContractTest {
     var engine =
         new Stub(
             "{\"publicid\":\"id\",\"url\":\"https://mesh.internal:4433/sharing?c=temporary\",\"result\":\"OK\"}");
-    engine.create("node//test", "Técnico", true);
+    engine.create("node//test", "Técnico", true, 2000000000L);
     assertEquals(2, engine.request.get("p"));
     assertEquals(72, engine.request.get("consent"));
-    assertEquals(3, engine.request.get("expire"));
+    assertEquals(2000000000L, engine.request.get("end"));
     assertEquals(true, engine.request.get("viewOnly"));
   }
 
@@ -70,6 +70,6 @@ class MeshContractTest {
   void unrelatedRemoteOriginIsRejected() {
     var engine =
         new Stub("{\"publicid\":\"id\",\"url\":\"https://untrusted.invalid/sharing?c=x\"}");
-    assertThrows(Exception.class, () -> engine.create("node//test", "Técnico", false));
+    assertThrows(Exception.class, () -> engine.create("node//test", "Técnico", false, 2000000000L));
   }
 }

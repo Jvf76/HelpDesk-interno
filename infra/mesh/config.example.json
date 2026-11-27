@@ -16,7 +16,7 @@
       "userNameIsEmail": false,
       "userConsentFlags": 72,
       "guestDeviceSharing": {
-        "maxSessionTime": 1
+        "maxSessionTime": 480
       },
       "consentMessages": {
         "title": "Uai Suporte",

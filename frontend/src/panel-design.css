@@ -159,3 +159,34 @@
 .uai-chart-tooltip-note { display:block; font-size:11px; color:#52616c; margin:2px 0 10px; }
 .uai-chart-tooltip-value { display:flex; justify-content:space-between; gap:16px; padding:4px 0; }
 .uai-chart-tooltip-value b { white-space:nowrap; }
+
+.panel-skip { position:fixed; left:12px; top:8px; transform:translateY(-180%); z-index:100; background:#fff; color:#222; padding:10px 16px; }
+.panel-skip:focus { transform:none; }
+.monitor.uai-shell.uai-panel-design .mon-sidebar { background:#20262a; border-color:#353e44; }
+.monitor.uai-shell.uai-panel-design .mon-brand b { color:#fff; }
+.monitor.uai-shell.uai-panel-design .mon-brand img { mix-blend-mode:normal; background:white; border-radius:6px; }
+.monitor.uai-shell.uai-panel-design .mon-sidebar :is(small,nav button,.mon-sidebar-foot) { color:#cfdae0; }
+.monitor.uai-shell.uai-panel-design .mon-sidebar nav button[aria-current=page] { color:white; background:#39434a; border-color:transparent; }
+.monitor.uai-shell.uai-panel-design .mon-sidebar nav button[aria-current=page]::before { background:#ff6268; }
+.monitor.uai-shell.uai-panel-design .mon-sidebar nav button:hover { color:white; background:#30393f; }
+.monitor.uai-shell.uai-panel-design .mon-sidebar-foot { background:transparent; border-color:#454e53; }
+.monitor.uai-panel-design :is(.mon-inventory,.mon-card,.panel-history-selection) { border-radius:8px; }
+
+.panel-sidebar-account {
+  margin-top:auto; padding:16px 0 0; display:grid;
+  grid-template-columns:auto minmax(0,1fr); align-items:center; gap:9px;
+  border-top:1px solid #454e53; color:#fff;
+}
+.panel-sidebar-account .mon-avatar { background:#38454d; color:#fff; }
+.monitor .panel-account-name small { color:#c6d1d7; font-size:11px; }
+.panel-account-actions { display:flex; gap:6px; grid-column:1/-1; }
+.monitor.uai-panel-design .panel-account-actions button {
+  min-height:34px; padding:7px 10px; color:#e0e8ec; border-color:#49555e; background:transparent;
+}
+.monitor.uai-panel-design .panel-account-actions button:hover { background:#354149; }
+@media(max-width:700px) {
+  .panel-sidebar-account { display:flex; gap:8px; margin:0; padding:8px 0; }
+  .panel-account-actions { margin-left:auto; }
+}
+
+.equipment-audit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }

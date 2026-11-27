@@ -99,7 +99,7 @@ class CriticalFlowsTest {
     when(engine.enabled()).thenReturn(true);
     when(engine.observe(anyString(), anyBoolean(), anyBoolean()))
         .thenReturn(new RemoteEngine.Observation("READY", null, null, null));
-    when(engine.create(anyString(), anyString(), anyBoolean()))
+    when(engine.create(anyString(), anyString(), anyBoolean(), anyLong()))
         .thenReturn(
             new RemoteEngine.Share("test-share", "https://remote.invalid/sharing?c=test-only"));
   }
@@ -188,7 +188,7 @@ class CriticalFlowsTest {
                 aliceAccount,
                 Map.of("deviceId", device, "mode", "CONTROL")))
         .andExpect(status().isForbidden());
-    verify(engine, never()).create(anyString(), anyString(), anyBoolean());
+    verify(engine, never()).create(anyString(), anyString(), anyBoolean(), anyLong());
   }
 
   @Test
@@ -200,7 +200,7 @@ class CriticalFlowsTest {
                 techAccount,
                 Map.of("deviceId", device, "mode", "CONTROL")))
         .andExpect(status().isForbidden());
-    verify(engine, never()).create(anyString(), anyString(), anyBoolean());
+    verify(engine, never()).create(anyString(), anyString(), anyBoolean(), anyLong());
   }
 
   @Test
@@ -216,7 +216,7 @@ class CriticalFlowsTest {
     UUID id = request(techAccount, "VIEW");
     service.decide(device, id, "accept");
     service.launch(techAccount.actor(), id);
-    verify(engine).create(anyString(), anyString(), eq(true));
+    verify(engine).create(anyString(), anyString(), eq(true), anyLong());
   }
 
   @Test
@@ -225,7 +225,7 @@ class CriticalFlowsTest {
     UUID id = request(techAccount, "CONTROL");
     service.decide(device, id, "reject");
     assertThrows(Exception.class, () -> service.launch(techAccount.actor(), id));
-    verify(engine, never()).create(anyString(), anyString(), anyBoolean());
+    verify(engine, never()).create(anyString(), anyString(), anyBoolean(), anyLong());
     assertEquals("REJECTED", service.get(techAccount.actor(), id).get("result"));
   }
 
@@ -233,7 +233,7 @@ class CriticalFlowsTest {
   void pendingSessionCannotIssueRemoteLink() {
     UUID id = request(adminAccount, "VIEW");
     assertThrows(Exception.class, () -> service.launch(adminAccount.actor(), id));
-    verify(engine, never()).create(anyString(), anyString(), anyBoolean());
+    verify(engine, never()).create(anyString(), anyString(), anyBoolean(), anyLong());
   }
 
   @Test
@@ -367,7 +367,7 @@ class CriticalFlowsTest {
     assertThrows(Exception.class, () -> service.launch(another.actor(), id));
     service.launch(adminAccount.actor(), id);
     assertThrows(Exception.class, () -> service.launch(adminAccount.actor(), id));
-    verify(engine, times(1)).create(anyString(), anyString(), anyBoolean());
+    verify(engine, times(1)).create(anyString(), anyString(), anyBoolean(), anyLong());
   }
 
   @Test
@@ -383,7 +383,7 @@ class CriticalFlowsTest {
   void agentCannotDecideForAnotherDevice() throws Exception {
     UUID id = request(adminAccount, "VIEW");
     assertThrows(Exception.class, () -> service.decide(UUID.randomUUID(), id, "accept"));
-    verify(engine, never()).create(anyString(), anyString(), anyBoolean());
+    verify(engine, never()).create(anyString(), anyString(), anyBoolean(), anyLong());
   }
 
   @Test
@@ -453,7 +453,7 @@ class CriticalFlowsTest {
   @Test void localUserCanDowngradeControlToView() {
     var id=request(adminAccount,"CONTROL");service.decide(device,id,"accept-view");
     assertEquals("VIEW",service.get(adminAccount.actor(),id).get("mode"));
-    service.launch(adminAccount.actor(),id);verify(engine).create(anyString(),anyString(),eq(true));
+    service.launch(adminAccount.actor(),id);verify(engine).create(anyString(),anyString(),eq(true), anyLong());
   }
   @Test void viewerBootstrapRequiresConsentAndOwner() {
     var id=request(adminAccount,"CONTROL");
@@ -493,17 +493,17 @@ class CriticalFlowsTest {
     assertTrue(result.get("consent_only").asBoolean());
     assertEquals("tech",service.forDevice(device).getFirst().get("technician"));
     assertThrows(Exception.class,()->service.launch(techAccount.actor(),id));
-    verify(engine,never()).create(anyString(),anyString(),anyBoolean());
+    verify(engine,never()).create(anyString(),anyString(),anyBoolean(), anyLong());
     service.decide(device,id,"accept-view");
     service.launch(techAccount.actor(),id);
-    verify(engine).create(anyString(),anyString(),eq(true));
+    verify(engine).create(anyString(),anyString(),eq(true), anyLong());
   }
   @Test void assistedRejectionNeverCreatesTransport() {
     grant(true);
     var id=Db.id(service.requestAssisted(techAccount.actor(),device.toString(),"CONTROL","test-ip"),"id");
     service.decide(device,id,"reject");
     assertThrows(Exception.class,()->service.launch(techAccount.actor(),id));
-    verify(engine,never()).create(anyString(),anyString(),anyBoolean());
+    verify(engine,never()).create(anyString(),anyString(),anyBoolean(), anyLong());
     assertEquals("REJECTED",service.get(techAccount.actor(),id).get("result"));
   }
   @Test void assistedSessionStillRejectsRevokedUserAndLocalStop() {
@@ -527,7 +527,7 @@ class CriticalFlowsTest {
     mvc.perform(post("/api/connections").contentType("application/json").content("{\"code\":\"x\",\"mode\":\"VIEW\"}")).andExpect(status().isUnauthorized());
     for(int i=0;i<5;i++) mvc.perform(req("POST","/api/connections",techAccount,Map.of("code","invalid","mode","VIEW"))).andExpect(status().isNotFound());
     mvc.perform(req("POST","/api/connections",techAccount,Map.of("code",device.toString(),"mode","VIEW"))).andExpect(status().isTooManyRequests());
-    verify(engine,never()).create(anyString(),anyString(),anyBoolean());
+    verify(engine,never()).create(anyString(),anyString(),anyBoolean(), anyLong());
   }
 
   @Test void enrollmentRetryRecoversLostResponseWithoutSecondDevice() throws Exception {
@@ -683,7 +683,7 @@ class CriticalFlowsTest {
     mvc.perform(post("/api/desktop/sessions/"+UUID.randomUUID()+"/launch").header("Authorization","Bearer test-agent-identity").header("X-Uai-Device",device)).andExpect(status().isForbidden());
     mvc.perform(req("POST","/api/connections",bobAccount,Map.of("code",device.toString(),"mode","VIEW"))).andExpect(status().isForbidden());
     assertFalse(db.exists("SELECT 1 FROM remote_session"));
-    verify(engine,never()).create(anyString(),anyString(),anyBoolean());
+    verify(engine,never()).create(anyString(),anyString(),anyBoolean(), anyLong());
   }
   @Test void receiveOnlyHistoryContainsIncomingSessionsOnly() throws Exception {
     var id=request(adminAccount,"VIEW");
@@ -699,7 +699,7 @@ class CriticalFlowsTest {
   }
 
   @Test void recoveryTokenRotatesCredentialAndPreservesPublicCode() throws Exception {
-    String token=activationToken(),old=Security.token();
+    String token=result(mvc.perform(req("POST","/api/activation-tokens",adminAccount,Map.of("lifetimeSeconds",300,"responsible"," Ana Silva ","storeName"," Loja Centro "))).andExpect(status().isOk())).get("token").asText(),old=Security.token();
     var original=result(mvc.perform(activation(token,UUID.randomUUID(),old)).andExpect(status().isOk()));
     UUID id=UUID.fromString(original.get("deviceId").asText());
     mvc.perform(post("/api/agent/unregister").header("Authorization","Bearer "+old)).andExpect(status().isOk());
@@ -707,6 +707,8 @@ class CriticalFlowsTest {
     String next=Security.token();UUID installation=UUID.randomUUID();
     var body=Map.of("token",recovery,"installationId",installation,"credential",next,"name","Recovered Windows","os","Windows","recoverDeviceId",id);
     var recovered=result(mvc.perform(post("/api/agent/activate").contentType("application/json").content(json.writeValueAsString(body))).andExpect(status().isOk()));
+    var assignment=db.one("SELECT responsible,store_name FROM device WHERE id=?",id);
+    assertEquals("Ana Silva",assignment.get("responsible"));assertEquals("Loja Centro",assignment.get("store_name"));
     assertEquals(original,recovered);assertEquals(2,db.list("SELECT id FROM device").size());
     mvc.perform(get("/api/agent/identity").header("Authorization","Bearer "+old)).andExpect(status().isUnauthorized());
     mvc.perform(get("/api/agent/identity").header("Authorization","Bearer "+next)).andExpect(status().isOk());
@@ -848,7 +850,7 @@ class CriticalFlowsTest {
     assertEquals("CONSENT_PENDING",service.get(adminAccount.actor(),id).get("phase"));
     service.decide(device,id,"accept-view");
     assertEquals("CONSENT_ACCEPTED_VIEW",service.get(adminAccount.actor(),id).get("phase"));
-    service.launch(adminAccount.actor(),id);verify(engine).create(anyString(),anyString(),eq(true));
+    service.launch(adminAccount.actor(),id);verify(engine).create(anyString(),anyString(),eq(true), anyLong());
     assertEquals("TRANSPORT_CONNECTING",service.get(adminAccount.actor(),id).get("phase"));
     when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("CONSENTED",null,null,1L));service.sweep();
     assertEquals("AWAITING_FIRST_FRAME",service.get(adminAccount.actor(),id).get("phase"));
@@ -882,11 +884,11 @@ class CriticalFlowsTest {
   }
   @Test void engineRejectionAndEverySetupDeadlineFailClosed() {
     UUID id=request(adminAccount,"VIEW");service.decide(device,id,"accept");
-    when(engine.create(anyString(),anyString(),anyBoolean())).thenThrow(new IllegalStateException("do-not-expose"));
+    when(engine.create(anyString(),anyString(),anyBoolean(), anyLong())).thenThrow(new IllegalStateException("do-not-expose"));
     assertThrows(Exception.class,()->service.launch(adminAccount.actor(),id));
     assertEquals("FAILED",service.get(adminAccount.actor(),id).get("phase"));
     assertFalse(service.trace(adminAccount.actor(),id).toString().contains("do-not-expose"));
-    doReturn(new RemoteEngine.Share("test-share","test")).when(engine).create(anyString(),anyString(),anyBoolean());
+    doReturn(new RemoteEngine.Share("test-share","test")).when(engine).create(anyString(),anyString(),anyBoolean(), anyLong());
     for(String observation:List.of("READY","AWAITING_CONSENT","CONSENTED","AWAITING_RENDER")) {
       UUID next=request(adminAccount,"CONTROL");service.decide(device,next,"accept");service.launch(adminAccount.actor(),next);
       when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation(observation,null,null,observation.equals("CONSENTED")?1L:null));service.sweep();
@@ -924,7 +926,7 @@ class CriticalFlowsTest {
     long started=System.currentTimeMillis();
     when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("ACTIVE",null,started,started-25000));service.sweep();
     var row=db.one("SELECT * FROM remote_session WHERE id=?",id);
-    assertEquals(Instant.ofEpochMilli(started).plusSeconds(60),Db.instant(row.get("active_until")));
+    assertEquals(Db.instant(db.one("SELECT expires_at FROM user_session WHERE token_hash=?",row.get("user_token_hash")).get("expires_at")),Db.instant(row.get("active_until")));
     assertEquals(row.get("active_until"),row.get("expires_at"));
     assertEquals("VIEWING",row.get("phase"));
     when(engine.observe(anyString(),eq(true),eq(false))).thenReturn(new RemoteEngine.Observation("ACTIVE",null,started+20000,started));service.sweep();
@@ -945,4 +947,41 @@ class CriticalFlowsTest {
     assertNull(result.get("started_at"));
   }
 
+  @Test void dashboardReportsActualDailyPeaksAndRecentRequests() throws Exception {
+    var now=OffsetDateTime.now().minusMinutes(1);
+    db.exec("INSERT INTO fleet_metric(observed_at,total,online,offline,in_session,cpu_pct,memory_pct) VALUES(?,1,1,0,0,22,81)",now);
+    request(adminAccount,"CONTROL");
+    mvc.perform(get("/api/monitoring/insights").cookie(adminAccount.cookie()))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.daily[0].ram").value(81.0))
+        .andExpect(jsonPath("$.activity[0].kind").value("requested"))
+        .andExpect(jsonPath("$.health[0].count").value(1));
+  }
+
+  @Test void removingComputerPreservesIndividualHistoryAndRevokesAccess() throws Exception {
+    String token=activationToken(),credential=Security.token();
+    String id=result(mvc.perform(activation(token,UUID.randomUUID(),credential)).andExpect(status().isOk())).get("deviceId").asText();
+    String route="/api/inventory/"+id;
+    mvc.perform(req("PUT",route,adminAccount,Map.of("friendlyName","Recepção","city","Centro","responsible","Ana","department","Loja","notes",""))).andExpect(status().isOk());
+    mvc.perform(req("DELETE",route,techAccount,null)).andExpect(status().isForbidden());
+    for(int i=0;i<2;i++)mvc.perform(req("DELETE",route,adminAccount,null)).andExpect(status().isOk());
+    mvc.perform(req("GET","/api/inventory",adminAccount,null)).andExpect(jsonPath("$.total").value(1));
+    mvc.perform(req("GET","/api/monitoring/summary",adminAccount,null)).andExpect(jsonPath("$.totals.total").value(1));
+    mvc.perform(req("GET","/api/equipment-history/computers/removed",adminAccount,null)).andExpect(jsonPath("$[0].id").value(id));
+    var events=result(mvc.perform(req("GET","/api/equipment-history/computers/"+id+"/events",adminAccount,null)).andExpect(status().isOk()));
+    var names=events.findValuesAsText("action");
+    assertTrue(names.containsAll(List.of("responsible","DEVICE_ACTIVATED","DEVICE_REMOVED")));
+    assertEquals(1,Collections.frequency(names,"DEVICE_REMOVED"));
+    mvc.perform(post("/api/agent/heartbeat").header("Authorization","Bearer "+credential).contentType("application/json").content("{\"os\":\"Windows\"}")).andExpect(status().isUnauthorized());
+  }
+
+  @Test @org.springframework.transaction.annotation.Transactional
+  void printerHistorySurvivesRemoval() throws Exception {
+    String id=result(mvc.perform(req("POST","/api/printers",adminAccount,Map.of("label","Filial","serial","LAB"))).andExpect(status().isOk())).get("id").asText();
+    mvc.perform(req("PUT","/api/printers/"+id,adminAccount,Map.of("label","Filial B","serial","LAB"))).andExpect(status().isOk());
+    mvc.perform(req("DELETE","/api/printers/"+id,adminAccount,null)).andExpect(status().isOk());
+    mvc.perform(req("GET","/api/equipment-history/printers/removed",adminAccount,null)).andExpect(jsonPath("$[0].id").value(id));
+    var events=result(mvc.perform(req("GET","/api/equipment-history/printers/"+id+"/events",adminAccount,null)).andExpect(status().isOk()));
+    assertTrue(events.findValuesAsText("action").containsAll(List.of("PRINTER_CREATED","label","PRINTER_REMOVED")));
+    assertFalse(result(mvc.perform(req("GET","/api/printers",adminAccount,null))).get("printers").toString().contains(id));
+  }
 }

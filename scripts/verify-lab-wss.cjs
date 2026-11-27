@@ -15,7 +15,7 @@ ws.on('message',raw=>{
  const m=JSON.parse(raw);
  if(m.action==='userinfo') ws.send(JSON.stringify({action:'uaiSessionCapabilities',responseid:'probe'}));
  if(m.action==='uaiSessionCapabilities'){
-  if(m.version!==1||!m.oneConnection||m.leaseSeconds!==12){console.error('Capacidades inesperadas');process.exitCode=1;}
+  if(m.version!==4||!m.renderAck||!m.relayTelemetry||!m.oneConnection||m.leaseSeconds!==12||m.loginBoundLifetime!==true||m.setupSeconds!==120){console.error('Capacidades inesperadas');process.exitCode=1;}
   else { console.log('WSS autenticado e capacidades Uai verificadas com TLS validado.'); ws.send(JSON.stringify({action:'uaiViewerBootstrap',publicid:'nonexistent-probe',clientIp:'127.0.0.1',responseid:'bootstrap-probe'})); return; }
   clearTimeout(timeout);ws.close();
  }
