@@ -32,7 +32,6 @@ try{for(const role of ['ADMIN','LEITURA']){
    directory.push({id:'fixture',name:u.name,login:u.login,role:u.role,active:true});body={id:'fixture'};
   }
   else if(url.pathname==='/api/users')body=directory;
-  else if(url.pathname.endsWith('/permissions'))body=[];
   else throw new Error('Unexpected endpoint '+url.pathname);
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
  });
@@ -64,6 +63,19 @@ try{for(const role of ['ADMIN','LEITURA']){
  const changes=page.getByRole('dialog',{name:'Histórico de alterações'});
  await changes.getByText('Colaborador',{exact:true}).waitFor();
  await changes.getByRole('heading',{name:device.friendly_name}).waitFor();
+ // The generic section style used to leave the device card white in dark mode.
+ const contrast=await changes.locator('.computer-change-group').evaluate(group=>{
+  const luminance=color=>color.match(/[\d.]+/g).slice(0,3).map(Number)
+   .map(n=>n/255).map(n=>n<=0.04045?n/12.92:((n+0.055)/1.055)**2.4)
+   .reduce((sum,n,i)=>sum+n*[0.2126,0.7152,0.0722][i],0);
+  const bg=luminance(getComputedStyle(group).backgroundColor);
+  return Array.from(group.querySelectorAll('h3,small,strong,time,dt,dd'),el=>{
+   const fg=luminance(getComputedStyle(el).color);
+   return (Math.max(fg,bg)+0.05)/(Math.min(fg,bg)+0.05);
+  });
+ });
+ assert(contrast.length>0&&contrast.every(ratio=>ratio>=4.5));
+
  await changes.getByText('Bruna',{exact:true}).waitFor();
  await changes.getByText(/ti\.teste/).waitFor();
  assert.equal(await changes.getByRole('button',{name:/Auditoria de/}).count(),0);
