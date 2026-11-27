@@ -899,3 +899,5 @@ button:focus-visible { outline: 2px solid #b95321; outline-offset: 3px; }
 .device-app { max-width: 1200px; margin: 0 auto; padding: 32px; }
 .device-app > .card { margin-top: 24px; }
 .device-code { font-size: 30px; letter-spacing: 2px; overflow-wrap: anywhere; }
+
+.login.first-access { display:grid; grid-template-columns:minmax(0,1fr); }

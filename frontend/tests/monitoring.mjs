@@ -31,6 +31,10 @@ try{for(const role of ['ADMIN','LEITURA']){
    assert.equal(role,'ADMIN');const u=route.request().postDataJSON();assert.equal(u.role,'LEITURA');
    directory.push({id:'fixture',name:u.name,login:u.login,role:u.role,active:true});body={id:'fixture'};
   }
+  else if(url.pathname==='/api/users/fixture/reset-password'){
+   assert.equal(role,'ADMIN');assert.equal(method,'POST');assert.equal(route.request().headers()['x-csrf-token'],'test-csrf');
+   body={temporaryPassword:'simulated-temporary-value'};
+  }
   else if(url.pathname==='/api/users')body=directory;
   else throw new Error('Unexpected endpoint '+url.pathname);
   await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
@@ -57,6 +61,16 @@ try{for(const role of ['ADMIN','LEITURA']){
   await page.getByLabel('Senha inicial',{exact:false}).fill('fixture-only-test-value');
   await page.getByRole('button',{name:'Salvar usuário'}).click();
   await page.getByRole('cell',{name:'pessoa.teste'}).waitFor();checks++;
+  await page.getByRole('button',{name:'Redefinir senha'}).click();
+  await page.getByRole('button',{name:'Cancelar',exact:true}).click();
+  assert(!calls.includes('/api/users/fixture/reset-password'));
+  await page.getByRole('button',{name:'Redefinir senha'}).click();
+  const reset=page.getByRole('dialog',{name:'Redefinir senha de pessoa.teste'});
+  await reset.getByRole('button',{name:'Gerar senha temporária'}).click();
+  assert.equal(await reset.getByLabel('Senha temporária',{exact:true}).inputValue(),'simulated-temporary-value');
+  await reset.getByRole('button',{name:'Fechar',exact:true}).click();
+  assert.equal(await page.getByLabel('Senha temporária',{exact:true}).count(),0);checks+=3;
+
  }
  await page.getByRole('button',{name:'Computadores',exact:true}).click();
  await page.getByRole('button',{name:'Histórico de alterações'}).click();

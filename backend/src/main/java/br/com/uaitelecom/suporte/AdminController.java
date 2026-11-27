@@ -47,7 +47,7 @@ class AdminController {
         "Senha excede 72 bytes.");
     UUID id = UUID.randomUUID();
     db.exec(
-        "INSERT INTO app_user(id,name,login,password_hash,role,active) VALUES (?,?,?,?,?,TRUE)",
+        "INSERT INTO app_user(id,name,login,password_hash,role,active,must_change_password) VALUES (?,?,?,?,?,TRUE,TRUE)",
         id,
         u.name(),
         u.login().toLowerCase(Locale.ROOT),
@@ -56,6 +56,22 @@ class AdminController {
     db.exec("UPDATE app_user SET panel_role=? WHERE id=?",panel(u.role()),id);
     db.audit(a.id().toString(), "USER_CREATED", id);
     return Map.of("id", id);
+  }
+
+  @PostMapping("/{id}/reset-password")
+  @org.springframework.transaction.annotation.Transactional
+  Map<String,String> resetPassword(@PathVariable UUID id,HttpServletRequest r) {
+    var admin=Security.actor(r);
+    Security.require(admin.admin(),"Apenas administrador.");
+    Security.require(!admin.id().equals(id),"Selecione outra conta para redefinir a senha.");
+    String temporary=Security.token();
+    int changed=db.exec("UPDATE app_user SET password_hash=?,must_change_password=TRUE WHERE id=? AND active=TRUE",
+        passwords.encode(temporary),id);
+    if(changed!=1)throw new org.springframework.web.server.ResponseStatusException(
+        org.springframework.http.HttpStatus.NOT_FOUND,"Conta ativa não encontrada.");
+    db.exec("DELETE FROM user_session WHERE user_id=?",id);
+    db.audit(admin.id().toString(),"USER_PASSWORD_RESET",id);
+    return Map.of("temporaryPassword",temporary);
   }
 
   @PutMapping("/{id}")

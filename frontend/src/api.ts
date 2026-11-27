@@ -4,6 +4,7 @@ export type User = {
   name: string;
   role: "ADMIN" | "TECNICO" | "SOLICITANTE" | "OPERADOR" | "LEITURA";
   csrf: string;
+  mustChangePassword?: boolean;
   login?: string;
   active?: boolean;
 };

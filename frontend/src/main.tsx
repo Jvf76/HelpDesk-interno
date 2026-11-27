@@ -101,14 +101,14 @@ function App() {
     setUsers(u);
   }
   useEffect(() => {
-    if (!user || ["ADMIN","TECNICO","OPERADOR","LEITURA"].includes(user.role)) return;
+    if (!user || user.mustChangePassword || ["ADMIN","TECNICO","OPERADOR","LEITURA"].includes(user.role)) return;
     void refresh().catch((e) => setError(e.message));
     const t = setInterval(
       () => void refresh().catch((e) => setError(e.message)),
       10000,
     );
     return () => clearInterval(t);
-  }, [user?.id]);
+  }, [user?.id,user?.mustChangePassword]);
   useEffect(() => {
     if (!session || session.ended_at) return;
     let stopped = false;
@@ -238,6 +238,24 @@ function App() {
         </main>
       </div>
     );
+  if(user.mustChangePassword) return <div className="login first-access"><main>
+    <form onSubmit={e=>{
+      const {newPassword,confirmation}=fields(e);
+      if(newPassword!==confirmation){setError("As senhas não coincidem.");return;}
+      void action(async()=>{
+        const updated=await api<User>("/auth/first-password","POST",{newPassword});
+        setCsrf(updated.csrf);setUser(updated);
+      });
+    }}>
+      <img src="/brand/uai-logo.png" alt="Uai Telecom" width="90"/>
+      <h2>Troque sua senha inicial</h2>
+      <p>Para acessar o Uai Suporte, escolha uma nova senha com pelo menos 14 caracteres.</p>
+      {alert}
+      <label>Nova senha<input name="newPassword" type="password" autoComplete="new-password" minLength={14} maxLength={72} required/></label>
+      <label>Confirme a nova senha<input name="confirmation" type="password" autoComplete="new-password" minLength={14} maxLength={72} required/></label>
+      <button className="primary" disabled={busy}>Salvar e entrar</button>
+      <button type="button" disabled={busy} onClick={()=>void action(async()=>{await api("/auth/logout","POST");clear();})}>Sair</button>
+    </form></main></div>;
   if(["ADMIN","TECNICO","OPERADOR","LEITURA"].includes(user.role)) return <MonitoringPanel user={user} onLogout={clear}/>;
   return (
     <div className="app">

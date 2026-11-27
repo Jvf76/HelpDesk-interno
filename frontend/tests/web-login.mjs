@@ -10,7 +10,7 @@ try {
   for (const mode of ["online", "offline", "tls"]) {
     const page = await browser.newPage();
     const errors = [];
-    let logged = false;
+    let logged = false, firstAccess = true;
     const calls = [];
     page.on("pageerror", (e) => errors.push(e.message));
     const respond = async (r) => {
@@ -21,7 +21,8 @@ try {
         id: "test",
         name: "Técnico de teste",
         role: "SOLICITANTE",
-        csrf: "test-csrf",
+        csrf: firstAccess?"initial-csrf":"test-csrf",
+        mustChangePassword:firstAccess,
       };
       if (mode === "offline") {
         status = 503;
@@ -34,6 +35,10 @@ try {
       } else if (r.path === "/auth/login") {
         logged = true;
         body = user;
+      } else if (r.path === "/auth/first-password") {
+        assert.equal(r.csrf,"initial-csrf");
+        assert.deepEqual(r.body,{newPassword:"fixture-password-new"});
+        firstAccess=false;body={...user,mustChangePassword:false,csrf:"test-csrf"};
       } else if (r.path === "/auth/logout") {
         assert.equal(r.csrf, "test-csrf");
         logged = false;
@@ -79,6 +84,15 @@ try {
       await page.getByLabel("Login", { exact: true }).fill("test");
       await page.getByLabel("Senha", { exact: true }).fill("test");
       await page.getByRole("button", { name: "Entrar", exact: true }).click();
+      await page.getByRole("heading",{name:"Troque sua senha inicial"}).waitFor();
+      await page.reload();
+      await page.getByLabel("Nova senha",{exact:true}).fill("fixture-password-new");
+      await page.getByLabel("Confirme a nova senha").fill("fixture-password-other");
+      await page.getByRole("button",{name:"Salvar e entrar"}).click();
+      await page.getByRole("alert").filter({hasText:"As senhas não coincidem."}).waitFor();
+      assert(!calls.some(c=>c.path==="/devices"||c.path==="/auth/first-password"));
+      await page.getByLabel("Confirme a nova senha").fill("fixture-password-new");
+      await page.getByRole("button",{name:"Salvar e entrar"}).click();
       await page
         .getByRole("heading", { name: "Seu código e conexão", exact: true })
         .waitFor();

@@ -238,3 +238,6 @@
  .panel-users .user-editor-form { padding:14px; }
  .panel-users .mon-filters { display:grid; grid-template-columns:minmax(0,1fr); }
 }
+.password-reset-dialog .equipment-audit-body { padding-block:12px; }
+.password-reset-dialog label { display:grid; gap:6px; color:var(--dash-text); }
+.password-reset-dialog input { width:100%; min-width:0; font-family:monospace; }

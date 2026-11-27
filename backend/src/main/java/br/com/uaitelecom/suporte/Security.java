@@ -118,6 +118,14 @@ class Security {
               s.sendError(403);
               return;
             }
+            boolean firstLogin = Boolean.TRUE.equals(u.get("must_change_password"));
+            if (firstLogin && !Set.of("/api/auth/me", "/api/auth/logout", "/api/auth/first-password").contains(path)) {
+              s.setStatus(403);
+              s.setContentType("application/json;charset=UTF-8");
+              s.getWriter().write("{\"message\":\"Troque a senha inicial para acessar o painel.\"}");
+              return;
+            }
+            r.setAttribute("mustChangePassword", firstLogin);
             r.setAttribute(
                 "actor",
                 new Actor(

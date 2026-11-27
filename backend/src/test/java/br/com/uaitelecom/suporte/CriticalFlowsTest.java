@@ -826,6 +826,55 @@ class CriticalFlowsTest {
     mvc.perform(get("/api/monitoring/series").param("from",from).param("to",to).cookie(adminAccount.cookie())).andExpect(status().isOk());
     mvc.perform(req("GET","/api/monitoring/summary",adminAccount,null)).andExpect(status().isOk()).andExpect(jsonPath("$.totals.total").value(1));
   }
+  @Test void administratorCanResetAnotherUsersPassword() throws Exception {
+    String path="/api/users/"+tech+"/reset-password";
+    mvc.perform(req("POST",path,bobAccount,null)).andExpect(status().isForbidden());
+    mvc.perform(req("POST","/api/users/"+admin+"/reset-password",adminAccount,null)).andExpect(status().isForbidden());
+    mvc.perform(post(path).cookie(adminAccount.cookie())).andExpect(status().isForbidden());
+    String temporary=result(mvc.perform(req("POST",path,adminAccount,null)).andExpect(status().isOk()))
+        .get("temporaryPassword").asText();
+    assertTrue(temporary.length()>=14);
+    mvc.perform(get("/api/auth/me").cookie(techAccount.cookie())).andExpect(status().isUnauthorized());
+    String login=db.one("SELECT login FROM app_user WHERE id=?",tech).get("login").toString();
+    mvc.perform(post("/api/auth/login").contentType("application/json").content(json.writeValueAsBytes(Map.of("login",login,"password",PASSWORD))))
+        .andExpect(status().isUnauthorized());
+    var session=mvc.perform(post("/api/auth/login").contentType("application/json").content(json.writeValueAsBytes(Map.of("login",login,"password",temporary))))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.mustChangePassword").value(true)).andReturn().getResponse();
+    var cookie=session.getCookie("UAI_SESSION");
+    mvc.perform(get("/api/inventory").cookie(cookie)).andExpect(status().isForbidden());
+    mvc.perform(post("/api/auth/first-password").cookie(cookie).header("X-CSRF-Token",json.readTree(session.getContentAsString()).get("csrf").asText())
+        .contentType("application/json").content(json.writeValueAsBytes(Map.of("newPassword",Security.token()))))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.mustChangePassword").value(false));
+    mvc.perform(post("/api/auth/login").contentType("application/json").content(json.writeValueAsBytes(Map.of("login",login,"password",temporary))))
+        .andExpect(status().isUnauthorized());
+    assertTrue(db.exists("SELECT 1 FROM audit_event WHERE actor=? AND action='USER_PASSWORD_RESET' AND resource_id=?",admin.toString(),tech.toString()));
+  }
+
+  @Test void newAccountCanOnlyChangeItsInitialPassword() throws Exception {
+    mvc.perform(req("POST","/api/users",adminAccount,Map.of("name","Nova conta","login","nova.conta","password",PASSWORD,"role","ADMIN")))
+        .andExpect(status().isOk());
+    var initialLogin=json.writeValueAsBytes(Map.of("login","nova.conta","password",PASSWORD));
+    var response=mvc.perform(post("/api/auth/login").contentType("application/json").content(initialLogin))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.mustChangePassword").value(true)).andReturn().getResponse();
+    var cookie=response.getCookie("UAI_SESSION");
+    String csrf=json.readTree(response.getContentAsString()).get("csrf").asText();
+    mvc.perform(get("/api/users").cookie(cookie)).andExpect(status().isForbidden());
+    mvc.perform(get("/api/auth/me").cookie(cookie)).andExpect(jsonPath("$.mustChangePassword").value(true));
+    var route="/api/auth/first-password";
+    String fresh=Security.token();
+    var body=json.writeValueAsBytes(Map.of("newPassword",fresh));
+    mvc.perform(post(route).cookie(cookie).contentType("application/json").content(body)).andExpect(status().isForbidden());
+    mvc.perform(post(route).cookie(cookie).header("X-CSRF-Token",csrf).contentType("application/json")
+        .content(json.writeValueAsBytes(Map.of("newPassword",PASSWORD)))).andExpect(status().isBadRequest());
+    var changed=mvc.perform(post(route).cookie(cookie).header("X-CSRF-Token",csrf).contentType("application/json").content(body))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.mustChangePassword").value(false)).andReturn().getResponse();
+    mvc.perform(get("/api/users").cookie(changed.getCookie("UAI_SESSION"))).andExpect(status().isOk());
+    mvc.perform(get("/api/auth/me").cookie(cookie)).andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/auth/login").contentType("application/json").content(initialLogin)).andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/auth/login").contentType("application/json").content(json.writeValueAsBytes(Map.of("login","nova.conta","password",fresh))))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.mustChangePassword").value(false));
+  }
+
   @Test void newPanelRolesUseWebLoginAndCannotMutateMonitoringAsReader() throws Exception {
     mvc.perform(req("POST","/api/users",adminAccount,Map.of("name","Read only","login","read-only","password",PASSWORD,"role","LEITURA"))).andExpect(status().isOk());
     mvc.perform(post("/api/auth/login").contentType("application/json").content(json.writeValueAsString(Map.of("login","read-only","password",PASSWORD)))).andExpect(status().isOk()).andExpect(jsonPath("$.role").value("LEITURA"));

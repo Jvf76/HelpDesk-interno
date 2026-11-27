@@ -35,6 +35,8 @@ O sucesso depende de permitir suporte com consentimento explícito, mostrar o es
 ### Conta, autorização e auditoria
 
 - A administração cadastra contas individuais em Usuários, com nome, login, senha e perfil. As permissões de cada conta seguem o perfil e as autorizações de acesso ao equipamento.
+- Administradores podem redefinir a senha de outra conta ativa. O painel exibe a senha temporária gerada uma única vez para entrega ao titular. A redefinição invalida as sessões de login anteriores e exige uma nova senha pessoal no próximo acesso.
+- Contas criadas no painel devem substituir a senha inicial no primeiro acesso antes de utilizar o sistema.
 - A conta compartilhada da equipe de TI continua disponível. A auditoria identifica a conta autenticada em cada alteração. Quando a conta é compartilhada, só é possível atribuir a ação àquela conta.
 - O histórico de computadores agrupa os eventos por equipamento, incluindo os removidos, com data, conta de origem e valores anteriores e novos quando disponíveis. A ativação local identifica separadamente a conta que autorizou o token.
 - O painel concentra inventário, identificação do colaborador, cidade, setor, monitoramento de CPU, memória e armazenamento, administração, auditoria e histórico das sessões.

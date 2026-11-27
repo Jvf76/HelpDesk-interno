@@ -4,6 +4,8 @@ import jakarta.servlet.http.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.*;
+import java.nio.charset.StandardCharsets;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
@@ -38,6 +40,7 @@ class AuthController {
       @NotBlank @Size(max = 120) String login, @NotBlank @Size(max = 72) String password) {}
 
   @PostMapping("/login")
+  @Transactional(noRollbackFor = ResponseStatusException.class)
   synchronized Map<String, Object> login(
       @Valid @RequestBody Login body, HttpServletRequest r, HttpServletResponse response) {
     String login = body.login().trim().toLowerCase(Locale.ROOT);
@@ -50,7 +53,7 @@ class AuthController {
         throw new ResponseStatusException(
             HttpStatus.TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde 15 minutos.");
     }
-    var rows = db.list("SELECT * FROM app_user WHERE login=? AND active=TRUE", login);
+    var rows = db.list("SELECT * FROM app_user WHERE login=? AND active=TRUE FOR UPDATE", login);
     boolean valid =
         passwords.matches(
             body.password(),
@@ -64,13 +67,18 @@ class AuthController {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Login ou senha inválidos.");
     }
     var u = rows.getFirst();
+    db.audit(u.get("id").toString(), "LOGIN", "session");
+    return startSession(u,response,Boolean.TRUE.equals(u.get("must_change_password")));
+  }
+
+  private Map<String,Object> startSession(Map<String,Object> u,HttpServletResponse response,boolean mustChange) {
     String token = Security.token(), csrf = Security.token();
     db.exec(
         "INSERT INTO user_session VALUES (?,?,?,?)",
         Security.hash(token),
         u.get("id"),
         csrf,
-        now.plusHours(8));
+        OffsetDateTime.now().plusHours(8));
     response.addHeader(
         "Set-Cookie",
         ResponseCookie.from("UAI_SESSION", token)
@@ -81,14 +89,34 @@ class AuthController {
             .maxAge(Duration.ofHours(8))
             .build()
             .toString());
-    db.audit(u.get("id").toString(), "LOGIN", "session");
-    return Map.of("id", u.get("id"), "name", u.get("name"), "role", Objects.toString(u.get("panel_role"),u.get("role").toString()), "csrf", csrf);
+    return Map.of("id", u.get("id"), "name", u.get("name"), "role", Objects.toString(u.get("panel_role"),u.get("role").toString()), "csrf", csrf, "mustChangePassword",mustChange);
+  }
+
+  record FirstPassword(@NotBlank @Size(min=14,max=72) String newPassword) {}
+
+  @PostMapping("/first-password")
+  @Transactional
+  Map<String,Object> firstPassword(@Valid @RequestBody FirstPassword input,HttpServletRequest r,HttpServletResponse response) {
+    var actor=Security.actor(r);
+    var u=db.one("SELECT * FROM app_user WHERE id=? AND active=TRUE FOR UPDATE",actor.id());
+    Security.require(Boolean.TRUE.equals(u.get("must_change_password")) &&
+        db.exists("SELECT 1 FROM user_session WHERE token_hash=? AND user_id=? AND expires_at>?",actor.tokenHash(),actor.id(),OffsetDateTime.now()),
+        "Entre novamente para continuar.");
+    String password=input.newPassword();
+    if(password.getBytes(StandardCharsets.UTF_8).length>72)
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A nova senha deve ter até 72 bytes.");
+    if(passwords.matches(password,u.get("password_hash").toString()))
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Escolha uma senha diferente da senha inicial.");
+    db.exec("UPDATE app_user SET password_hash=?,must_change_password=FALSE WHERE id=?",passwords.encode(password),actor.id());
+    db.exec("DELETE FROM user_session WHERE user_id=?",actor.id());
+    db.audit(actor.id().toString(),"FIRST_PASSWORD_CHANGED",actor.id());
+    return startSession(u,response,false);
   }
 
   @GetMapping("/me")
   Map<String, Object> me(HttpServletRequest r) {
     var a = Security.actor(r);
-    return Map.of("id", a.id(), "name", a.name(), "role", a.role(), "csrf", r.getAttribute("csrf"));
+    return Map.of("id", a.id(), "name", a.name(), "role", a.role(), "csrf", r.getAttribute("csrf"), "mustChangePassword", r.getAttribute("mustChangePassword"));
   }
 
   @PostMapping("/logout")
